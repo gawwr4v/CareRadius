@@ -102,3 +102,9 @@ All geofences and visits are stored in a local Room database:
 | `ACCESS_FINE_LOCATION` | Precise location for geofencing |
 | `ACCESS_BACKGROUND_LOCATION` | Monitor geofences when app is closed |
 | `POST_NOTIFICATIONS` | Show entry/exit notifications |
+
+## License
+
+This project is open source and available under the [MIT License](LICENSE).
+
+
