@@ -14,8 +14,9 @@ data class VisitModel(
     val entryTime: Long,
     val exitTime: Long?,
     val durationMillis: Long?,
-    val geofenceLatitude: Double,
-    val geofenceLongitude: Double
+    val geofenceLatitude: Double?,
+    val geofenceLongitude: Double?,
+    val isGeofenceDeleted: Boolean = false
 ) {
     val formattedEntryTime: String
         get() = formatTime(entryTime)
@@ -46,14 +47,22 @@ data class VisitModel(
     }
     
     companion object {
-        fun fromVisitWithGeofence(visitWithGeofence: VisitWithGeofence): VisitModel = VisitModel(
-            visitId = visitWithGeofence.visit.id,
-            geofenceName = visitWithGeofence.geofence.name,
-            entryTime = visitWithGeofence.visit.entryTime,
-            exitTime = visitWithGeofence.visit.exitTime,
-            durationMillis = visitWithGeofence.visit.durationMillis,
-            geofenceLatitude = visitWithGeofence.geofence.latitude,
-            geofenceLongitude = visitWithGeofence.geofence.longitude
-        )
+        fun fromVisitWithGeofence(visitWithGeofence: VisitWithGeofence): VisitModel {
+            val geofence = visitWithGeofence.geofence
+            val visit = visitWithGeofence.visit
+            
+            return VisitModel(
+                visitId = visit.id,
+                // Use stored geofenceName from visit (preserved even after deletion)
+                geofenceName = visit.geofenceName,
+                entryTime = visit.entryTime,
+                exitTime = visit.exitTime,
+                durationMillis = visit.durationMillis,
+                // Include location if geofence still exists
+                geofenceLatitude = geofence?.latitude,
+                geofenceLongitude = geofence?.longitude,
+                isGeofenceDeleted = geofence == null
+            )
+        }
     }
 }

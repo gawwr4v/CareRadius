@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.rex.careradius.data.repository.VisitRepository
 import com.rex.careradius.domain.model.VisitModel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Visit List Screen
@@ -23,4 +24,16 @@ class VisitListViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+    
+    fun clearHistory() {
+        viewModelScope.launch {
+            visitRepository.clearAllVisits()
+        }
+    }
+    
+    fun deleteVisit(visitId: Long) {
+        viewModelScope.launch {
+            visitRepository.deleteVisit(visitId)
+        }
+    }
 }

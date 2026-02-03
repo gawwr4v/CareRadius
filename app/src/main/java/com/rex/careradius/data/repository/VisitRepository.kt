@@ -20,4 +20,8 @@ class VisitRepository(private val visitDao: VisitDao) {
     
     fun getAllVisitsWithGeofence(): Flow<List<VisitWithGeofence>> = 
         visitDao.getAllVisitsWithGeofence()
+    
+    suspend fun deleteVisit(visitId: Long) = visitDao.deleteVisit(visitId)
+    
+    suspend fun clearAllVisits() = visitDao.deleteAllVisits()
 }

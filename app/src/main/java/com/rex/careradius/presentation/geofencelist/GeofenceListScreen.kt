@@ -79,9 +79,10 @@ fun GeofenceListScreen(
                     GeofenceCard(
                         geofence = geofence,
                         onClick = {
-                            // Navigate to map screen with query parameters
+                            // navigate to map screen with coordinates
                             navController.navigate("map?lat=${geofence.latitude}&lng=${geofence.longitude}") {
-                                popUpTo("map?lat={lat}&lng={lng}") { inclusive = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         },
                         onLongPress = {

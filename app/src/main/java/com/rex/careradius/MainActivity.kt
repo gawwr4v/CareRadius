@@ -65,12 +65,9 @@ fun MainScreen(
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Place, contentDescription = "Map") },
                     label = { Text("Map") },
-                    selected = currentRoute == Screen.Map.route,
+                    selected = currentRoute?.startsWith("map") == true,
                     onClick = {
                         navController.navigate(Screen.Map.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -83,9 +80,6 @@ fun MainScreen(
                     selected = currentRoute == Screen.GeofenceList.route,
                     onClick = {
                         navController.navigate(Screen.GeofenceList.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
                             launchSingleTop = true
                             restoreState = true
                         }
@@ -98,9 +92,6 @@ fun MainScreen(
                     selected = currentRoute == Screen.VisitList.route,
                     onClick = {
                         navController.navigate(Screen.VisitList.route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
-                            }
                             launchSingleTop = true
                             restoreState = true
                         }

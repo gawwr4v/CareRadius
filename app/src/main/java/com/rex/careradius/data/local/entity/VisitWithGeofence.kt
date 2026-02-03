@@ -6,6 +6,7 @@ import androidx.room.Relation
 /**
  * Data class for JOIN query results
  * Combines visit information with geofence details
+ * Geofence may be null if the geofence was deleted after the visit
  */
 data class VisitWithGeofence(
     @Embedded val visit: VisitEntity,
@@ -13,5 +14,5 @@ data class VisitWithGeofence(
         parentColumn = "geofenceId",
         entityColumn = "id"
     )
-    val geofence: GeofenceEntity
+    val geofence: GeofenceEntity? // nullable - geofence may have been deleted
 )

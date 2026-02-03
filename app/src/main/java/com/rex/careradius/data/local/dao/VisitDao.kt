@@ -22,9 +22,14 @@ interface VisitDao {
     
     @Transaction
     @Query("""
-        SELECT visits.* FROM visits
-        INNER JOIN geofences ON visits.geofenceId = geofences.id
-        ORDER BY visits.entryTime DESC
+        SELECT * FROM visits
+        ORDER BY entryTime DESC
     """)
     fun getAllVisitsWithGeofence(): Flow<List<VisitWithGeofence>>
+    
+    @Query("DELETE FROM visits WHERE id = :visitId")
+    suspend fun deleteVisit(visitId: Long)
+    
+    @Query("DELETE FROM visits")
+    suspend fun deleteAllVisits()
 }

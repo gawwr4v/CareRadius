@@ -41,7 +41,10 @@ class GeofenceManager(private val context: Context) {
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
+        android.util.Log.d("GeofenceManager", "registerGeofence called: id=$id, lat=$latitude, lng=$longitude, radius=$radius")
+        
         if (!hasLocationPermissions()) {
+            android.util.Log.e("GeofenceManager", "Location permissions not granted")
             onError("Location permissions not granted")
             return
         }
@@ -62,12 +65,17 @@ class GeofenceManager(private val context: Context) {
         
         try {
             geofencingClient.addGeofences(geofencingRequest, geofencePendingIntent).run {
-                addOnSuccessListener { onSuccess() }
+                addOnSuccessListener { 
+                    android.util.Log.d("GeofenceManager", "Geofence registered successfully: $id")
+                    onSuccess() 
+                }
                 addOnFailureListener { exception ->
+                    android.util.Log.e("GeofenceManager", "Failed to add geofence: ${exception.message}")
                     onError("Failed to add geofence: ${exception.message}")
                 }
             }
         } catch (e: SecurityException) {
+            android.util.Log.e("GeofenceManager", "Security exception: ${e.message}")
             onError("Security exception: ${e.message}")
         }
     }
