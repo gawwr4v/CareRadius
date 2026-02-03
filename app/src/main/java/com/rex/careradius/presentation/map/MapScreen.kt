@@ -323,12 +323,13 @@ LaunchedEffect(changeLocationForGeofenceId) {
         AlertDialog(
             onDismissRequest = { viewModel.onAddPinDialogDismiss() },
             title = { Text("Add Geofence Pin") },
-            text = { Text("Choose how to add a new geofence:") },
-            confirmButton = {
+            text = {
                 Column {
+                    Text("Choose how to add a new geofence:")
+                    Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            viewModel.onDropPinHere(LocationCoordinates(0.0, 0.0)) // Dummy coords, will use map center
+                            viewModel.onDropPinHere(LocationCoordinates(0.0, 0.0))
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -343,6 +344,7 @@ LaunchedEffect(changeLocationForGeofenceId) {
                     }
                 }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { viewModel.onAddPinDialogDismiss() }) {
                     Text("Cancel")
