@@ -3,6 +3,7 @@ package com.rex.careradius.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -92,7 +93,8 @@ fun NavGraph(
         }
         
         composable(Screen.GeofenceList.route) {
-            val viewModel = GeofenceListViewModel(geofenceRepository, geofenceManager)
+            val context = LocalContext.current
+            val viewModel = GeofenceListViewModel(context, geofenceRepository, visitRepository, geofenceManager)
             GeofenceListScreen(
                 viewModel = viewModel,
                 navController = navController

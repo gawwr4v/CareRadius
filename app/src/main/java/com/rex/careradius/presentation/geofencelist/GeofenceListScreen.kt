@@ -132,7 +132,6 @@ fun GeofenceListScreen(
         var editName by remember(geofenceToEdit) { mutableStateOf(geofence.name) }
         var editRadius by remember(geofenceToEdit) { mutableStateOf(geofence.radius) }
         var editIcon by remember(geofenceToEdit) { mutableStateOf(geofence.icon) }
-         var showLocationChangeOptions by remember { mutableStateOf(false) }
         
         AlertDialog(
             onDismissRequest = { geofenceToEdit = null },
