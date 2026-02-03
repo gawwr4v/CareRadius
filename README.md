@@ -20,7 +20,7 @@ A geofencing Android application that tracks your visits to specific locations. 
 ### 🔔 Smart Notifications
 - **Entry Alerts** - Get notified when you enter a geofenced area
 - **Exit Alerts** - Get notified when you leave a geofenced area
-- **Background Monitoring** - Works even when app is closed
+- **Background Monitoring** - Works even when app is closed ( will cost you some battery though)
 
 ### ⏱️ Visit History
 - **Automatic Tracking** - Entry/exit times recorded automatically
@@ -33,7 +33,7 @@ A geofencing Android application that tracks your visits to specific locations. 
 ### 💾 Data Management
 - **Persistent Storage** - All data saved locally using Room database
 - **Offline Support** - Works without internet connection
-- **Database Migrations** - Smooth updates without data loss
+
 
 ## Screenshots
 
@@ -219,9 +219,19 @@ For reliable geofence detection:
 3. **Location Mode** - Use "High Accuracy" GPS mode
 4. **Physical Movement** - GPS jitter doesn't trigger events; real movement required
 
+## Database Migrations
+
+The app handles database upgrades automatically:
+
+| Version | Changes |
+|---------|---------|
+| 1 → 2 | Added `icon` column to geofences |
+| 2 → 3 | Added `geofenceName` to visits, made `geofenceId` nullable (SET NULL on delete) |
 
 ## License
 
 This project is open source and available under the [MIT License](LICENSE).
 
+---
 
+**Built with ❤️ using Kotlin and Jetpack Compose**
