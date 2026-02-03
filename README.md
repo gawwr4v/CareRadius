@@ -4,12 +4,36 @@ A geofencing Android application that tracks your visits to specific locations. 
 
 ## Features
 
-- **📌 Geofence Creation** - Long-press on the map to create geofences with custom names, icons, and radius (10-50m)
-- **🔔 Entry/Exit Notifications** - Get notified when you enter or leave a geofenced area
-- **⏱️ Duration Tracking** - Automatically calculates time spent at each location
-- **📊 Visit History** - View all your visits with timestamps and duration
-- **💾 Persistent Storage** - All data saved locally, works offline
-- **🗺️ Custom Map Markers** - Use emoji icons to personalize your geofences
+### 🗺️ Interactive Map
+- **Pin Drop** - Long-press anywhere on the map to create a geofence
+- **Current Location** - Quick button to add geofence at your current location
+- **Custom Markers** - Emoji icons displayed on the map for each geofence
+- **Visual Radius** - Colored circles show geofence boundaries
+
+### 📌 Geofence Management
+- **Custom Names** - Give each location a memorable name
+- **Emoji Icons** - Choose from a variety of emojis to represent locations
+- **Adjustable Radius** - Set radius from 10m to 500m via slider
+- **Edit Anytime** - Modify name, icon, radius, or location of existing geofences
+- **Change Location** - Relocate a geofence by dropping a new pin or using current location
+
+### 🔔 Smart Notifications
+- **Entry Alerts** - Get notified when you enter a geofenced area
+- **Exit Alerts** - Get notified when you leave a geofenced area
+- **Background Monitoring** - Works even when app is closed
+
+### ⏱️ Visit History
+- **Automatic Tracking** - Entry/exit times recorded automatically
+- **Duration Calculation** - See exactly how long you spent at each location
+- **Active Visit Indicator** - Highlights visits still in progress
+- **History Preservation** - Visits remain even if geofence is deleted
+- **Clear History** - Delete all visit records with one tap
+- **Individual Delete** - Remove specific visit records
+
+### 💾 Data Management
+- **Persistent Storage** - All data saved locally using Room database
+- **Offline Support** - Works without internet connection
+- **Database Migrations** - Smooth updates without data loss
 
 ## Screenshots
 
@@ -29,11 +53,11 @@ A geofencing Android application that tracks your visits to specific locations. 
     </td>
     <td align="center" valign="top">
       <img src="https://github.com/user-attachments/assets/24cb64bf-d564-485b-8dcb-6b0540797435" width="250"/><br/>
-      <em>Saved geofences</em>
+      <em>Saved geofences with edit options</em>
     </td>
     <td align="center" valign="top">
       <img src="https://github.com/user-attachments/assets/08403c5c-1f9c-41e3-94d8-ba8cc3f32e24" width="250"/><br/>
-      <em>Visit history</em>
+      <em>Visit history with duration</em>
     </td>
   </tr>
 </table>
@@ -41,19 +65,47 @@ A geofencing Android application that tracks your visits to specific locations. 
 
 ## Tech Stack
 
-- **Language:** Kotlin
-- **UI Framework:** Jetpack Compose
-- **Database:** Room
-- **Maps:** MapLibre GL Native (OpenStreetMap)
-- **Location Services:** Google Play Services Location API
-- **Architecture:** MVVM with Repository Pattern
-- **Navigation:** Jetpack Navigation Compose
+| Technology | Purpose |
+|------------|---------|
+| **Kotlin** | Primary language |
+| **Jetpack Compose** | Modern declarative UI |
+| **Room** | Local SQLite database |
+| **MapLibre GL** | OpenStreetMap-based maps |
+| **Google Play Services** | Geofencing & Location APIs |
+| **Coroutines & Flow** | Async operations & reactive data |
+| **Navigation Compose** | Screen navigation |
+| **Material 3** | UI components & theming |
 
-## Requirements
+## Architecture
 
-- Android 10 (API 29) or higher
-- Location permissions (Fine + Background)
-- Google Play Services
+The app follows **MVVM (Model-View-ViewModel)** architecture with a **Repository pattern**:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                      UI Layer (Compose)                       │
+│      MapScreen  │  GeofenceListScreen  │  VisitListScreen     │
+└───────────────────────────────────────────────────────────────┘
+                              ↓
+┌───────────────────────────────────────────────────────────────┐
+│                      ViewModel Layer                          │
+│ MapViewModel  │  GeofenceListViewModel  │  VisitListViewModel │
+└───────────────────────────────────────────────────────────────┘
+                              ↓
+┌───────────────────────────────────────────────────────────────┐
+│                     Repository Layer                          │
+│       GeofenceRepository    │    VisitRepository              │
+└───────────────────────────────────────────────────────────────┘
+                              ↓
+┌───────────────────────────────────────────────────────────────┐
+│                         Data Layer                            │
+│       Room Database  │  GeofenceDao  │  VisitDao              │
+└───────────────────────────────────────────────────────────────┘
+                              ↓
+┌───────────────────────────────────────────────────────────────┐
+│                        System Layer                           │
+│  GeofenceManager  │  GeofenceReceiver  │  NotificationHelper  │
+└───────────────────────────────────────────────────────────────┘
+```
 
 ## Project Structure
 
@@ -61,24 +113,50 @@ A geofencing Android application that tracks your visits to specific locations. 
 app/src/main/java/com/rex/careradius/
 ├── data/
 │   ├── local/
-│   │   ├── dao/           # room DAOs
-│   │   ├── entity/        # database entities
-│   │   └── AppDatabase.kt
-│   └── repository/        # data repositories
+│   │   ├── dao/              # Room DAOs (GeofenceDao, VisitDao)
+│   │   ├── entity/           # Database entities
+│   │   │   ├── GeofenceEntity.kt
+│   │   │   ├── VisitEntity.kt
+│   │   │   └── VisitWithGeofence.kt
+│   │   └── AppDatabase.kt    # Room database with migrations
+│   └── repository/           # Data repositories
+│       ├── GeofenceRepository.kt
+│       └── VisitRepository.kt
 ├── domain/
-│   └── model/             # domain models
+│   └── model/                # Domain/UI models
+│       ├── GeofenceModel.kt
+│       └── VisitModel.kt
 ├── navigation/
-│   └── NavGraph.kt        # navigation setup
+│   ├── NavGraph.kt           # Navigation setup
+│   └── Screen.kt             # Screen definitions
 ├── presentation/
-│   ├── geofencelist/      # geofence list screen
-│   ├── map/               # map screen
-│   └── visitlist/         # visit history screen
+│   ├── geofencelist/         # Geofence list & edit screen
+│   │   ├── GeofenceListScreen.kt
+│   │   └── GeofenceListViewModel.kt
+│   ├── map/                  # Map screen
+│   │   ├── MapScreen.kt
+│   │   └── MapViewModel.kt
+│   └── visitlist/            # Visit history screen
+│       ├── VisitListScreen.kt
+│       └── VisitListViewModel.kt
 ├── system/
-│   ├── geofence/          # geofence manager & receiver
-│   ├── location/          # permission handling
-│   └── notification/      # notification helper
-└── ui/theme/              # compose theme
+│   ├── geofence/
+│   │   ├── GeofenceManager.kt    # Register/unregister geofences
+│   │   └── GeofenceReceiver.kt   # BroadcastReceiver for transitions
+│   ├── location/
+│   │   └── LocationPermissionHandler.kt
+│   └── notification/
+│       └── NotificationHelper.kt
+├── ui/theme/                 # Material 3 theme
+└── MainActivity.kt           # Single activity entry point
 ```
+
+## Requirements
+
+- **Android 10 (API 29)** or higher
+- **Location permissions** (Fine + Background)
+- **Google Play Services** installed on device
+- **GPS/High Accuracy location** mode recommended
 
 ## Setup Instructions
 
@@ -99,23 +177,30 @@ app/src/main/java/com/rex/careradius/
 
 ## How It Works
 
-### Geofencing
-The app uses Google Play Services Geofencing API to monitor location transitions. When you create a geofence:
-1. Location coordinates and radius are saved to Room database
-2. A geofence is registered with the system
-3. A BroadcastReceiver listens for ENTER/EXIT events
-4. Events trigger notifications and database updates
+### Geofencing Flow
+```
+User creates geofence → Saved to Room DB → Registered with GeofencingClient
+                                                    ↓
+                              GeofenceReceiver triggered on ENTER/EXIT
+                                                    ↓
+                        Visit record created/updated → Notification sent
+```
 
 ### Background Processing
-The `GeofenceReceiver` is a `BroadcastReceiver` that handles transitions even when the app is closed. It:
-- Creates visit records on ENTER
-- Calculates duration and updates records on EXIT
+The `GeofenceReceiver` is a `BroadcastReceiver` that handles transitions even when the app is closed:
+- Creates visit records with geofence name on **ENTER**
+- Calculates duration and updates records on **EXIT**
 - Sends notifications for both events
 
 ### Data Persistence
-All geofences and visits are stored in a local Room database:
-- `GeofenceEntity` - location details, radius, creation time
-- `VisitEntity` - entry/exit times, calculated duration
+All data is stored in a local Room database with proper migrations:
+
+| Entity | Fields |
+|--------|--------|
+| `GeofenceEntity` | id, name, icon, latitude, longitude, radius, createdAt |
+| `VisitEntity` | id, geofenceId (nullable), geofenceName, entryTime, exitTime, durationMillis |
+
+**Note:** Visits preserve the geofence name even after the geofence is deleted.
 
 ## Permissions Required
 
@@ -124,6 +209,16 @@ All geofences and visits are stored in a local Room database:
 | `ACCESS_FINE_LOCATION` | Precise location for geofencing |
 | `ACCESS_BACKGROUND_LOCATION` | Monitor geofences when app is closed |
 | `POST_NOTIFICATIONS` | Show entry/exit notifications |
+
+## Geofencing Best Practices
+
+For reliable geofence detection:
+
+1. **Minimum Radius** - Using 100m+ for reliable triggers (Android limitation) (Note: the max radius for a fence to 10 - 50 Meters in this app for now )
+2. **Battery Optimization** - Disable for this app (Settings → Apps → Battery → Unrestricted)
+3. **Location Mode** - Use "High Accuracy" GPS mode
+4. **Physical Movement** - GPS jitter doesn't trigger events; real movement required
+
 
 ## License
 
