@@ -13,14 +13,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-// tags: broadcast, receiver, enter, exit, transition
 class GeofenceReceiver : BroadcastReceiver() {
     
     companion object {
         private const val TAG = "GeofenceReceiver"
     }
     
-    // tags: receive, event, trigger
     override fun onReceive(context: Context, intent: Intent) {
         android.util.Log.d(TAG, "onReceive called")
         
@@ -45,99 +43,102 @@ class GeofenceReceiver : BroadcastReceiver() {
             return
         }
         
+        // goAsync() keeps the BroadcastReceiver alive while our coroutine runs
+        val pendingResult = goAsync()
+        
         val database = AppDatabase.getDatabase(context)
         val visitRepository = VisitRepository(database.visitDao())
         val notificationHelper = NotificationHelper(context)
         
-        triggeringGeofences.forEach { geofence ->
-            val geofenceId = geofence.requestId.toLongOrNull() ?: return@forEach
-            android.util.Log.d(TAG, "Processing geofence id: $geofenceId")
-            
-            when (geofenceTransition) {
-                Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                    android.util.Log.d(TAG, "ENTER transition for $geofenceId")
-                    handleGeofenceEntry(context, geofenceId, visitRepository, notificationHelper)
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                triggeringGeofences.forEach { geofence ->
+                    val geofenceId = geofence.requestId.toLongOrNull() ?: return@forEach
+                    android.util.Log.d(TAG, "Processing geofence id: $geofenceId")
+                    
+                    when (geofenceTransition) {
+                        Geofence.GEOFENCE_TRANSITION_ENTER -> {
+                            android.util.Log.d(TAG, "ENTER transition for $geofenceId")
+                            handleGeofenceEntry(context, geofenceId, visitRepository, notificationHelper)
+                        }
+                        Geofence.GEOFENCE_TRANSITION_EXIT -> {
+                            android.util.Log.d(TAG, "EXIT transition for $geofenceId")
+                            handleGeofenceExit(context, geofenceId, visitRepository, notificationHelper)
+                        }
+                    }
                 }
-                Geofence.GEOFENCE_TRANSITION_EXIT -> {
-                    android.util.Log.d(TAG, "EXIT transition for $geofenceId")
-                    handleGeofenceExit(context, geofenceId, visitRepository, notificationHelper)
-                }
+            } finally {
+                // Signal the system that async work is done
+                pendingResult.finish()
             }
         }
     }
     
-    // tags: enter, entry, visit, start
-    private fun handleGeofenceEntry(
+    private suspend fun handleGeofenceEntry(
         context: Context,
         geofenceId: Long,
         visitRepository: VisitRepository,
         notificationHelper: NotificationHelper
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
-            // check for duplicate entry (gps jitter edge case)
-            val openVisit = visitRepository.getOpenVisitForGeofence(geofenceId)
-            if (openVisit != null) {
-                android.util.Log.d(TAG, "Already have open visit for $geofenceId, skipping")
-                return@launch
-            }
-            
-            // get geofence details first for name
-            val database = AppDatabase.getDatabase(context)
-            val geofence = database.geofenceDao().getGeofenceById(geofenceId)
-            val geofenceName = geofence?.name ?: "Unknown"
-            
-            // create new visit record with geofence name preserved
-            val visit = VisitEntity(
-                geofenceId = geofenceId,
-                geofenceName = geofenceName,
-                entryTime = System.currentTimeMillis(),
-                exitTime = null,
-                durationMillis = null
-            )
-            visitRepository.insert(visit)
-            android.util.Log.d(TAG, "Created visit for $geofenceName (id=$geofenceId)")
-            
-            notificationHelper.showGeofenceNotification(
-                geofenceName = geofenceName,
-                eventType = "Entered",
-                notificationId = geofenceId.toInt()
-            )
-        }
+        // Close ALL open visits first — enforces single-active-visit guarantee
+        // If user walks from geofence A into geofence B, A's visit gets closed here
+        val now = System.currentTimeMillis()
+        visitRepository.closeAllOpenVisits(now)
+        
+        // Get geofence details for name
+        val database = AppDatabase.getDatabase(context)
+        val geofence = database.geofenceDao().getGeofenceById(geofenceId)
+        val geofenceName = geofence?.name ?: "Unknown"
+        
+        // Create new visit record
+        val visit = VisitEntity(
+            geofenceId = geofenceId,
+            geofenceName = geofenceName,
+            entryTime = now,
+            exitTime = null,
+            durationMillis = null
+        )
+        visitRepository.insert(visit)
+        android.util.Log.d(TAG, "Created visit for $geofenceName (id=$geofenceId)")
+        
+        notificationHelper.showGeofenceNotification(
+            geofenceName = geofenceName,
+            eventType = "Entered",
+            notificationId = geofenceId.toInt()
+        )
     }
     
-    // tags: exit, leave, visit, end, duration
-    private fun handleGeofenceExit(
+    private suspend fun handleGeofenceExit(
         context: Context,
         geofenceId: Long,
         visitRepository: VisitRepository,
         notificationHelper: NotificationHelper
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val openVisit = visitRepository.getOpenVisitForGeofence(geofenceId)
-            if (openVisit == null) {
-                return@launch
-            }
-            
-            // calculate duration and close visit
-            val exitTime = System.currentTimeMillis()
-            val duration = exitTime - openVisit.entryTime
-            
-            val updatedVisit = openVisit.copy(
-                exitTime = exitTime,
-                durationMillis = duration
-            )
-            visitRepository.updateVisit(updatedVisit)
-            
-            val database = AppDatabase.getDatabase(context)
-            val geofence = database.geofenceDao().getGeofenceById(geofenceId)
-            val geofenceName = geofence?.name ?: "Unknown"
-            
-            notificationHelper.showGeofenceNotification(
-                geofenceName = geofenceName,
-                eventType = "Exited",
-                notificationId = geofenceId.toInt() + 10000
-            )
+        val openVisit = visitRepository.getOpenVisitForGeofence(geofenceId)
+        if (openVisit == null) {
+            android.util.Log.d(TAG, "No open visit for $geofenceId on EXIT (likely closed on prior ENTER)")
+            return
         }
+        
+        val exitTime = System.currentTimeMillis()
+        val duration = exitTime - openVisit.entryTime
+        
+        val updatedVisit = openVisit.copy(
+            exitTime = exitTime,
+            durationMillis = duration
+        )
+        visitRepository.updateVisit(updatedVisit)
+        
+        val database = AppDatabase.getDatabase(context)
+        val geofence = database.geofenceDao().getGeofenceById(geofenceId)
+        val geofenceName = geofence?.name ?: openVisit.geofenceName
+        
+        android.util.Log.d(TAG, "Closed visit for $geofenceName, duration=${duration}ms")
+        
+        notificationHelper.showGeofenceNotification(
+            geofenceName = geofenceName,
+            eventType = "Exited",
+            notificationId = geofenceId.toInt() + 10000
+        )
     }
 }
-

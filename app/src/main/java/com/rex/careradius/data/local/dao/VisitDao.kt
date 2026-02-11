@@ -32,4 +32,11 @@ interface VisitDao {
     
     @Query("DELETE FROM visits")
     suspend fun deleteAllVisits()
+    
+    @Query("""
+        UPDATE visits 
+        SET exitTime = :exitTime, durationMillis = :exitTime - entryTime 
+        WHERE exitTime IS NULL
+    """)
+    suspend fun closeAllOpenVisits(exitTime: Long)
 }

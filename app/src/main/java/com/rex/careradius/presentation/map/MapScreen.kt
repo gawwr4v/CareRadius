@@ -30,11 +30,19 @@ import com.mapbox.mapboxsdk.location.permissions.PermissionsManager
 import com.mapbox.mapboxsdk.maps.MapView
 import com.mapbox.mapboxsdk.maps.MapboxMap
 import com.mapbox.mapboxsdk.maps.Style
-import com.mapbox.mapboxsdk.plugins.annotation.CircleManager
-import com.mapbox.mapboxsdk.plugins.annotation.CircleOptions
 import com.mapbox.mapboxsdk.plugins.annotation.SymbolManager
 import com.mapbox.mapboxsdk.plugins.annotation.SymbolOptions
+import com.mapbox.mapboxsdk.style.layers.FillLayer
+import com.mapbox.mapboxsdk.style.layers.LineLayer
+import com.mapbox.mapboxsdk.style.layers.PropertyFactory
+import com.mapbox.mapboxsdk.style.sources.GeoJsonSource
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.Point
+import com.mapbox.geojson.Polygon
 import com.rex.careradius.system.location.LocationPermissionHandler
+import kotlin.math.cos
+import kotlin.math.sin
 
 // tags: map, screen, ui, maplibre, geofence
 @Composable
@@ -63,7 +71,7 @@ fun MapScreen(
     val dropPinMode by viewModel.dropPinMode.collectAsState()
     
     // handle navigation to change location for existing geofence
-LaunchedEffect(changeLocationForGeofenceId) {
+    LaunchedEffect(changeLocationForGeofenceId) {
         changeLocationForGeofenceId?.let { geofenceId ->
             viewModel.startLocationChangeMode(geofenceId)
         }
@@ -73,11 +81,13 @@ LaunchedEffect(changeLocationForGeofenceId) {
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var mapboxMap by remember { mutableStateOf<MapboxMap?>(null) }
     var symbolManager by remember { mutableStateOf<SymbolManager?>(null) }
-    var circleManager by remember { mutableStateOf<CircleManager?>(null) }
-    // tags: symbol, marker, lookup
     val symbolToGeofenceMap = remember { mutableMapOf<Long, Long>() }
     
-    // tags: init, maplibre
+    // Source/layer IDs for radius circles
+    val radiusSourceId = "geofence-radius-source"
+    val radiusFillLayerId = "geofence-radius-fill"
+    val radiusLineLayerId = "geofence-radius-line"
+    
     DisposableEffect(context) {
         Mapbox.getInstance(context)
         onDispose { }
@@ -110,7 +120,7 @@ LaunchedEffect(changeLocationForGeofenceId) {
                                     )
                                     locationComponent.isLocationComponentEnabled = true
                                     locationComponent.cameraMode = CameraMode.TRACKING
-                                    locationComponent.renderMode = RenderMode.COMPASS
+                                    locationComponent.renderMode = RenderMode.GPS
                                     
                                     if (targetLatitude != null && targetLongitude != null) {
                                         map.animateCamera(CameraUpdateFactory.newLatLngZoom(
@@ -140,6 +150,18 @@ LaunchedEffect(changeLocationForGeofenceId) {
                                     true
                                 }
                                 
+                                // Add GeoJSON source + layers for radius circles
+                                style.addSource(GeoJsonSource(radiusSourceId))
+                                style.addLayer(FillLayer(radiusFillLayerId, radiusSourceId).withProperties(
+                                    PropertyFactory.fillColor("#4A90E2"),
+                                    PropertyFactory.fillOpacity(0.2f)
+                                ))
+                                style.addLayer(LineLayer(radiusLineLayerId, radiusSourceId).withProperties(
+                                    PropertyFactory.lineColor("#4A90E2"),
+                                    PropertyFactory.lineWidth(2f),
+                                    PropertyFactory.lineOpacity(0.8f)
+                                ))
+                                
                                 symbolManager = SymbolManager(this, map, style).apply {
                                     addClickListener { symbol ->
                                         val geofenceId = symbolToGeofenceMap[symbol.id]
@@ -152,23 +174,20 @@ LaunchedEffect(changeLocationForGeofenceId) {
                                         true
                                     }
                                 }
-                                circleManager = CircleManager(this, map, style)
                                 
-                                renderGeofences(geofences, symbolManager, circleManager, symbolToGeofenceMap, style, context)
+                                renderGeofences(geofences, symbolManager, symbolToGeofenceMap, style, context)
+                                updateRadiusCircles(geofences, style, radiusSourceId)
                             }
                         }
                     }
                 },
                 update = {
                     symbolManager?.let { sm ->
-                        circleManager?.let { cm ->
-                            sm.deleteAll()
-                            cm.deleteAll()
-                            symbolToGeofenceMap.clear()
-                            // re-add bitmaps to style on every update
-                            mapboxMap?.getStyle { style ->
-                                renderGeofences(geofences, sm, cm, symbolToGeofenceMap, style, context)
-                            }
+                        sm.deleteAll()
+                        symbolToGeofenceMap.clear()
+                        mapboxMap?.getStyle { style ->
+                            renderGeofences(geofences, sm, symbolToGeofenceMap, style, context)
+                            updateRadiusCircles(geofences, style, radiusSourceId)
                         }
                     }
                 }
@@ -214,7 +233,7 @@ LaunchedEffect(changeLocationForGeofenceId) {
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(48.dp)
-                        .offset(y = (-24).dp), // Offset so bottom of pin is at center
+                        .offset(y = (-24).dp),
                     tint = MaterialTheme.colorScheme.error
                 )
                 
@@ -235,7 +254,6 @@ LaunchedEffect(changeLocationForGeofenceId) {
                             style = MaterialTheme.typography.titleMedium
                         )
                         
-                        // display current map center
                         val centerCoords = mapboxMap?.cameraPosition?.target
                         if (centerCoords != null) {
                             Text(
@@ -280,7 +298,6 @@ LaunchedEffect(changeLocationForGeofenceId) {
                         Lifecycle.Event.ON_PAUSE -> mapView?.onPause()
                         Lifecycle.Event.ON_STOP -> mapView?.onStop()
                         Lifecycle.Event.ON_DESTROY -> {
-                            // disable location component before destroy to prevent crash
                             try {
                                 mapboxMap?.locationComponent?.isLocationComponentEnabled = false
                                 mapboxMap?.locationComponent?.compassEngine = null
@@ -289,25 +306,20 @@ LaunchedEffect(changeLocationForGeofenceId) {
                             mapView = null
                             mapboxMap = null
                             symbolManager = null
-                            circleManager = null
                         }
                         else -> {}
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
-                    // Critical: Disable location component before disposing
                     try {
                         mapboxMap?.locationComponent?.isLocationComponentEnabled = false
                         mapboxMap?.locationComponent?.compassEngine = null
                     } catch (e: Exception) { }
                     lifecycleOwner.lifecycle.removeObserver(observer)
-                    // cleanup managers
                     try {
                         symbolManager?.deleteAll()
-                        circleManager?.deleteAll()
                         symbolManager = null
-                        circleManager = null
                     } catch (e: Exception) {}
                     mapView?.onLowMemory()
                     mapView?.onDestroy()
@@ -488,14 +500,12 @@ private fun createMarkerBitmap(label: String, context: android.content.Context, 
     val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
     
-    // use textpaint for emoji rendering
     val textPaint = android.text.TextPaint().apply {
         isAntiAlias = true
         textSize = size * 0.7f
         textAlign = android.graphics.Paint.Align.CENTER
     }
     
-    // handle surrogate pairs for multi-byte emojis
     val emoji = if (label.isNotEmpty()) {
         try {
             val codePointCount = label.codePointCount(0, minOf(label.length, 4))
@@ -505,13 +515,11 @@ private fun createMarkerBitmap(label: String, context: android.content.Context, 
         } catch (e: Exception) { label.take(1) }
     } else "📍"
     
-    // staticlayout for proper emoji rendering
     val staticLayout = android.text.StaticLayout.Builder
         .obtain(emoji, 0, emoji.length, textPaint, size)
         .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
         .build()
     
-    // center the emoji on canvas
     canvas.save()
     canvas.translate(size / 2f, (size - staticLayout.height) / 2f)
     staticLayout.draw(canvas)
@@ -520,51 +528,75 @@ private fun createMarkerBitmap(label: String, context: android.content.Context, 
     return bitmap
 }
 
-// tags: render, geofence, marker, circle
+/**
+ * Creates a GeoJSON polygon approximating a circle with 64 points.
+ * Uses proper spherical math so the circle is accurate at all latitudes.
+ */
+private fun createCirclePolygon(centerLat: Double, centerLng: Double, radiusMeters: Float, points: Int = 64): Polygon {
+    val coords = mutableListOf<Point>()
+    val earthRadius = 6371000.0 // meters
+    
+    for (i in 0..points) {
+        val angle = Math.toRadians((360.0 / points) * i)
+        val lat = Math.asin(
+            sin(Math.toRadians(centerLat)) * cos(radiusMeters / earthRadius) +
+            cos(Math.toRadians(centerLat)) * sin(radiusMeters / earthRadius) * cos(angle)
+        )
+        val lng = Math.toRadians(centerLng) + Math.atan2(
+            sin(angle) * sin(radiusMeters / earthRadius) * cos(Math.toRadians(centerLat)),
+            cos(radiusMeters / earthRadius) - sin(Math.toRadians(centerLat)) * sin(lat)
+        )
+        coords.add(Point.fromLngLat(Math.toDegrees(lng), Math.toDegrees(lat)))
+    }
+    
+    return Polygon.fromLngLats(listOf(coords))
+}
+
+/**
+ * Updates the GeoJSON source with circle polygons for all geofences.
+ */
+private fun updateRadiusCircles(
+    geofences: List<com.rex.careradius.data.local.entity.GeofenceEntity>,
+    style: Style,
+    sourceId: String
+) {
+    val features = geofences.map { geofence ->
+        Feature.fromGeometry(
+            createCirclePolygon(geofence.latitude, geofence.longitude, geofence.radius)
+        )
+    }
+    val source = style.getSourceAs<GeoJsonSource>(sourceId)
+    source?.setGeoJson(FeatureCollection.fromFeatures(features))
+}
+
+// tags: render, geofence, marker
 private fun renderGeofences(
     geofences: List<com.rex.careradius.data.local.entity.GeofenceEntity>,
     symbolManager: SymbolManager?,
-    circleManager: CircleManager?,
     symbolToGeofenceMap: MutableMap<Long, Long>,
     style: Style,
     context: android.content.Context
 ) {
     symbolManager?.let { sm ->
-        circleManager?.let { cm ->
-            geofences.forEach { geofence ->
-                val latLng = LatLng(geofence.latitude, geofence.longitude)
-                
-                // create marker from emoji/label
-                val label = geofence.icon.ifBlank { geofence.name }
-                val iconId = "marker-${geofence.id}"
-                
-
-                val bitmap = createMarkerBitmap(label, context)
-                style.addImage(iconId, bitmap) // no sdf - renders actual colors
-                
-                // create symbol at location
-                val symbol = sm.create(
-                    SymbolOptions()
-                        .withLatLng(latLng)
-                        .withIconImage(iconId)
-                        .withIconSize(0.8f)
-                        .withIconAnchor("center")
-                )
-                
-                // store symbol-geofence mapping for click handling
-                symbol?.let { symbolToGeofenceMap[it.id] = geofence.id }
-                
-                val radiusInDegrees = geofence.radius / 111320.0
-                cm.create(
-                    CircleOptions()
-                        .withLatLng(latLng)
-                        .withCircleRadius(radiusInDegrees.toFloat())
-                        .withCircleColor("#4A90E2")
-                        .withCircleOpacity(0.3f)
-                        .withCircleStrokeColor("#4A90E2")
-                        .withCircleStrokeWidth(2f)
-                )
-            }
+        sm.iconAllowOverlap = true
+        geofences.forEach { geofence ->
+            val latLng = LatLng(geofence.latitude, geofence.longitude)
+            
+            val label = geofence.icon.ifBlank { geofence.name }
+            val iconId = "marker-${geofence.id}"
+            
+            val bitmap = createMarkerBitmap(label, context)
+            style.addImage(iconId, bitmap)
+            
+            val symbol = sm.create(
+                SymbolOptions()
+                    .withLatLng(latLng)
+                    .withIconImage(iconId)
+                    .withIconSize(0.8f)
+                    .withIconAnchor("center")
+            )
+            
+            symbolToGeofenceMap[symbol.id] = geofence.id
         }
     }
 }

@@ -24,4 +24,6 @@ class VisitRepository(private val visitDao: VisitDao) {
     suspend fun deleteVisit(visitId: Long) = visitDao.deleteVisit(visitId)
     
     suspend fun clearAllVisits() = visitDao.deleteAllVisits()
+    
+    suspend fun closeAllOpenVisits(exitTime: Long) = visitDao.closeAllOpenVisits(exitTime)
 }

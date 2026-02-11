@@ -3,6 +3,7 @@ package com.rex.careradius.navigation
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -39,23 +40,23 @@ fun NavGraph(
     database: AppDatabase,
     geofenceManager: GeofenceManager
 ) {
-    val geofenceRepository = GeofenceRepository(database.geofenceDao())
-    val visitRepository = VisitRepository(database.visitDao())
+    val geofenceRepository = remember { GeofenceRepository(database.geofenceDao()) }
+    val visitRepository = remember { VisitRepository(database.visitDao()) }
     
     NavHost(
         navController = navController,
         startDestination = Screen.Map.route,
         enterTransition = {
-            fadeIn(animationSpec = tween(500))
+            fadeIn(animationSpec = tween(300))
         },
         exitTransition = {
-            fadeOut(animationSpec = tween(500))
+            fadeOut(animationSpec = tween(300))
         },
         popEnterTransition = {
-            fadeIn(animationSpec = tween(500))
+            fadeIn(animationSpec = tween(300))
         },
         popExitTransition = {
-            fadeOut(animationSpec = tween(500))
+            fadeOut(animationSpec = tween(300))
         }
     ) {
         // Map screen - supports optional coordinates for centering
@@ -83,7 +84,7 @@ fun NavGraph(
             val lng = backStackEntry.arguments?.getString("lng")?.toDoubleOrNull()
             val changeLocationForId = backStackEntry.arguments?.getString("changeLocationForId")?.toLongOrNull()
             
-            val viewModel = MapViewModel(geofenceRepository, geofenceManager)
+            val viewModel = remember { MapViewModel(geofenceRepository, geofenceManager) }
             MapScreen(
                 viewModel = viewModel,
                 targetLatitude = lat,
@@ -94,7 +95,7 @@ fun NavGraph(
         
         composable(Screen.GeofenceList.route) {
             val context = LocalContext.current
-            val viewModel = GeofenceListViewModel(context, geofenceRepository, visitRepository, geofenceManager)
+            val viewModel = remember { GeofenceListViewModel(context, geofenceRepository, visitRepository, geofenceManager) }
             GeofenceListScreen(
                 viewModel = viewModel,
                 navController = navController
@@ -102,7 +103,7 @@ fun NavGraph(
         }
         
         composable(Screen.VisitList.route) {
-            val viewModel = VisitListViewModel(visitRepository)
+            val viewModel = remember { VisitListViewModel(visitRepository) }
             VisitListScreen(viewModel = viewModel)
         }
     }

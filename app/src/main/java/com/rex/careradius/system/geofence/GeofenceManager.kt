@@ -14,6 +14,7 @@ import com.rex.careradius.data.local.AppDatabase
 import com.rex.careradius.data.repository.GeofenceRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // tags: geofence, location, gps, register
@@ -96,15 +97,14 @@ class GeofenceManager(private val context: Context) {
         val repository = GeofenceRepository(database.geofenceDao())
         
         CoroutineScope(Dispatchers.IO).launch {
-            repository.getAllGeofences().collect { geofences ->
-                geofences.forEach { geofence ->
-                    registerGeofence(
-                        id = geofence.id,
-                        latitude = geofence.latitude,
-                        longitude = geofence.longitude,
-                        radius = geofence.radius
-                    )
-                }
+            val geofences = repository.getAllGeofences().first()
+            geofences.forEach { geofence ->
+                registerGeofence(
+                    id = geofence.id,
+                    latitude = geofence.latitude,
+                    longitude = geofence.longitude,
+                    radius = geofence.radius
+                )
             }
         }
     }
