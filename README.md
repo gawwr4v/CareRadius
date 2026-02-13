@@ -13,14 +13,15 @@ A geofencing Android application that tracks your visits to specific locations. 
 ### 📌 Geofence Management
 - **Custom Names** - Give each location a memorable name
 - **Emoji Icons** - Choose from a variety of emojis to represent locations
-- **Adjustable Radius** - Set radius from 10m to 500m via slider
+- **Adjustable Radius** - Set radius from 10m to 50m via slider
 - **Edit Anytime** - Modify name, icon, radius, or location of existing geofences
-- **Change Location** - Relocate a geofence by dropping a new pin or using current location
+- **Change Location** - Relocate a geofence by dropping a new pin, current location, or manual coordinates
 
 ### 🔔 Smart Notifications
+- **Custom Reminders** - Set personalized arrival and exit messages per zone (e.g. "Take medicine", "Lock the door")
 - **Entry Alerts** - Get notified when you enter a geofenced area
 - **Exit Alerts** - Get notified when you leave a geofenced area
-- **Background Monitoring** - Works even when app is closed ( will cost you some battery though)
+- **Background Monitoring** - Works even when app is closed (will cost you some battery though)
 
 ### ⏱️ Visit History
 - **Automatic Tracking** - Entry/exit times recorded automatically
@@ -29,6 +30,10 @@ A geofencing Android application that tracks your visits to specific locations. 
 - **History Preservation** - Visits remain even if geofence is deleted
 - **Clear History** - Delete all visit records with one tap
 - **Individual Delete** - Remove specific visit records
+
+### ⚙️ Settings
+- **Dark / Light Theme** - Toggle between dark and light mode with preference persistence
+- **Theme Follows System** - Defaults to system theme on first launch
 
 ### 💾 Data Management
 - **Persistent Storage** - All data saved locally using Room database
@@ -69,42 +74,43 @@ A geofencing Android application that tracks your visits to specific locations. 
 |------------|---------|
 | **Kotlin** | Primary language |
 | **Jetpack Compose** | Modern declarative UI |
+| **Material 3** | UI components & theming (Nordic Utility design system) |
 | **Room** | Local SQLite database |
+| **DataStore** | User preferences (theme) |
 | **MapLibre GL** | OpenStreetMap-based maps |
 | **Google Play Services** | Geofencing & Location APIs |
 | **Coroutines & Flow** | Async operations & reactive data |
-| **Navigation Compose** | Screen navigation |
-| **Material 3** | UI components & theming |
+| **Navigation Compose** | Screen navigation with animated transitions |
 
 ## Architecture
 
 The app follows **MVVM (Model-View-ViewModel)** architecture with a **Repository pattern**:
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                      UI Layer (Compose)                       │
-│      MapScreen  │  GeofenceListScreen  │  VisitListScreen     │
-└───────────────────────────────────────────────────────────────┘
-                              ↓
-┌───────────────────────────────────────────────────────────────┐
-│                      ViewModel Layer                          │
-│ MapViewModel  │  GeofenceListViewModel  │  VisitListViewModel │
-└───────────────────────────────────────────────────────────────┘
-                              ↓
-┌───────────────────────────────────────────────────────────────┐
-│                     Repository Layer                          │
-│       GeofenceRepository    │    VisitRepository              │
-└───────────────────────────────────────────────────────────────┘
-                              ↓
-┌───────────────────────────────────────────────────────────────┐
-│                         Data Layer                            │
-│       Room Database  │  GeofenceDao  │  VisitDao              │
-└───────────────────────────────────────────────────────────────┘
-                              ↓
-┌───────────────────────────────────────────────────────────────┐
-│                        System Layer                           │
-│  GeofenceManager  │  GeofenceReceiver  │  NotificationHelper  │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          UI Layer (Compose)                             │
+│  MapScreen  │  GeofenceListScreen  │  VisitListScreen  │ SettingsScreen │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          ViewModel Layer                                │
+│ MapViewModel │ GeofenceListViewModel │ VisitListViewModel │ SettingsVM  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Repository Layer                                │
+│    GeofenceRepository  │  VisitRepository  │  UserPreferencesRepository │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                             Data Layer                                  │
+│     Room Database  │  GeofenceDao  │  VisitDao  │  DataStore            │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            System Layer                                 │
+│    GeofenceManager  │  GeofenceReceiver  │  NotificationHelper          │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -121,21 +127,26 @@ app/src/main/java/com/rex/careradius/
 │   │   └── AppDatabase.kt    # Room database with migrations
 │   └── repository/           # Data repositories
 │       ├── GeofenceRepository.kt
-│       └── VisitRepository.kt
+│       ├── VisitRepository.kt
+│       └── UserPreferencesRepository.kt  # DataStore for theme
 ├── domain/
 │   └── model/                # Domain/UI models
 │       ├── GeofenceModel.kt
 │       └── VisitModel.kt
 ├── navigation/
-│   ├── NavGraph.kt           # Navigation setup
-│   └── Screen.kt             # Screen definitions
+│   └── NavGraph.kt           # Navigation + route definitions
 ├── presentation/
+│   ├── components/           # Shared UI components
+│   │   └── PageHeader.kt
 │   ├── geofencelist/         # Geofence list & edit screen
 │   │   ├── GeofenceListScreen.kt
 │   │   └── GeofenceListViewModel.kt
 │   ├── map/                  # Map screen
 │   │   ├── MapScreen.kt
 │   │   └── MapViewModel.kt
+│   ├── settings/             # App settings
+│   │   ├── SettingsScreen.kt
+│   │   └── SettingsViewModel.kt
 │   └── visitlist/            # Visit history screen
 │       ├── VisitListScreen.kt
 │       └── VisitListViewModel.kt
@@ -147,7 +158,11 @@ app/src/main/java/com/rex/careradius/
 │   │   └── LocationPermissionHandler.kt
 │   └── notification/
 │       └── NotificationHelper.kt
-├── ui/theme/                 # Material 3 theme
+├── ui/theme/                 # Overall theme
+│   ├── Color.kt
+│   ├── Shape.kt
+│   ├── Theme.kt
+│   └── Type.kt
 └── MainActivity.kt           # Single activity entry point
 ```
 
@@ -197,7 +212,7 @@ All data is stored in a local Room database with proper migrations:
 
 | Entity | Fields |
 |--------|--------|
-| `GeofenceEntity` | id, name, icon, latitude, longitude, radius, createdAt |
+| `GeofenceEntity` | id, name, icon, latitude, longitude, radius, createdAt, entryMessage, exitMessage |
 | `VisitEntity` | id, geofenceId (nullable), geofenceName, entryTime, exitTime, durationMillis |
 
 **Note:** Visits preserve the geofence name even after the geofence is deleted.
@@ -214,7 +229,7 @@ All data is stored in a local Room database with proper migrations:
 
 For reliable geofence detection:
 
-1. **Minimum Radius** - Using 100m+ for reliable triggers (Android limitation) (Note: the max radius for a fence to 10 - 50 Meters in this app for now )
+1. **Minimum Radius** - Android recommends 100m+ for reliable triggers. This app allows 10–50m for precise tracking, but detection may be less consistent at smaller radii
 2. **Battery Optimization** - Disable for this app (Settings → Apps → Battery → Unrestricted)
 3. **Location Mode** - Use "High Accuracy" GPS mode
 4. **Physical Movement** - GPS jitter doesn't trigger events; real movement required
@@ -227,6 +242,7 @@ The app handles database upgrades automatically:
 |---------|---------|
 | 1 → 2 | Added `icon` column to geofences |
 | 2 → 3 | Added `geofenceName` to visits, made `geofenceId` nullable (SET NULL on delete) |
+| 3 → 4 | Added `entryMessage` and `exitMessage` columns to geofences and heavily updated the UI and overall app theme |
 
 ## License
 
