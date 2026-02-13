@@ -88,6 +88,9 @@ dependencies {
     
     // ViewModel Compose
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+
+    // DataStore Preferences
+    implementation(libs.androidx.datastore.preferences)
     
     // Permissions handling
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
