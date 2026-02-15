@@ -85,7 +85,7 @@ class GeofenceManager(private val context: Context) {
     fun unregisterGeofence(id: Long) {
         try {
             geofencingClient.removeGeofences(listOf(id.toString()))
-        } catch (e: SecurityException) {
+        } catch (_: SecurityException) {
             // silently fail, geofence might already be removed
         }
     }

@@ -85,10 +85,11 @@ class GeofenceReceiver : BroadcastReceiver() {
         val now = System.currentTimeMillis()
         visitRepository.closeAllOpenVisits(now)
         
-        // Get geofence details for name
+        // Get geofence details for name and custom message
         val database = AppDatabase.getDatabase(context)
         val geofence = database.geofenceDao().getGeofenceById(geofenceId)
         val geofenceName = geofence?.name ?: "Unknown"
+        val entryMessage = geofence?.entryMessage
         
         // Create new visit record
         val visit = VisitEntity(
@@ -104,7 +105,8 @@ class GeofenceReceiver : BroadcastReceiver() {
         notificationHelper.showGeofenceNotification(
             geofenceName = geofenceName,
             eventType = "Entered",
-            notificationId = geofenceId.toInt()
+            notificationId = geofenceId.toInt(),
+            customMessage = entryMessage
         )
     }
     
@@ -132,13 +134,15 @@ class GeofenceReceiver : BroadcastReceiver() {
         val database = AppDatabase.getDatabase(context)
         val geofence = database.geofenceDao().getGeofenceById(geofenceId)
         val geofenceName = geofence?.name ?: openVisit.geofenceName
+        val exitMessage = geofence?.exitMessage
         
         android.util.Log.d(TAG, "Closed visit for $geofenceName, duration=${duration}ms")
         
         notificationHelper.showGeofenceNotification(
             geofenceName = geofenceName,
             eventType = "Exited",
-            notificationId = geofenceId.toInt() + 10000
+            notificationId = geofenceId.toInt() + 10000,
+            customMessage = exitMessage
         )
     }
 }

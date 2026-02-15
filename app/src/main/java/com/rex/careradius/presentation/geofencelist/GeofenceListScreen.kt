@@ -1,32 +1,41 @@
 package com.rex.careradius.presentation.geofencelist
+
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavController
 import com.rex.careradius.data.local.entity.GeofenceEntity
+import com.rex.careradius.presentation.components.PageHeader
 import com.rex.careradius.presentation.map.EmojiInput
-import java.text.SimpleDateFormat
-import java.util.*
 
-/**
- * Geofence List Screen - Displays all configured geofences
- * Click: Navigate to Map and center on geofence
- * Long-press: Delete geofence
- */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GeofenceListScreen(
     viewModel: GeofenceListViewModel,
@@ -36,77 +45,95 @@ fun GeofenceListScreen(
     val geofences by viewModel.geofences.collectAsState()
     var geofenceToDelete by remember { mutableStateOf<GeofenceEntity?>(null) }
     var geofenceToEdit by remember { mutableStateOf<GeofenceEntity?>(null) }
-    var editName by remember { mutableStateOf("") }
-    var editRadius by remember { mutableStateOf(30f) }
     var showLocationChangeOptions by remember { mutableStateOf(false) }
     var showManualLocationEntry by remember { mutableStateOf(false) }
     var manualLat by remember { mutableStateOf("") }
     var manualLng by remember { mutableStateOf("") }
     
     Column(modifier = modifier.fillMaxSize()) {
-        // Header
-        Surface(
+        // Standardized Header
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.primaryContainer
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Geofences (${geofences.size})",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(16.dp)
-            )
+            PageHeader(title = "Your safe zones")
+            
+            if (geofences.isNotEmpty()) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.padding(end = 24.dp) // Removed top padding
+                ) {
+                    Text(
+                        text = "${geofences.size}",
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), // More padding for prominence
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold), // Bolder/Larger
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+            }
         }
         
         if (geofences.isEmpty()) {
-            // Empty state
+            // Friendly empty state
             Box(
                 modifier = Modifier.fillMaxSize(),
-                contentAlignment = androidx.compose.ui.Alignment.Center
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "No geofences created yet.\nLong-press on the map to create one.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("🛡️", fontSize = 56.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "No zones yet",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Long-press the map to create\nyour first safe zone",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         } else {
-            // List of geofences
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                // Authored spacing: distinct top padding
+                contentPadding = PaddingValues(top = 8.dp, bottom = 12.dp, start = 24.dp, end = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp) // Relaxed rhythm
             ) {
-                items(geofences) { geofence ->
+                items(geofences, key = { it.id }) { geofence ->
                     GeofenceCard(
                         geofence = geofence,
                         onClick = {
-                            // navigate to map screen with coordinates
                             navController.navigate("map?lat=${geofence.latitude}&lng=${geofence.longitude}") {
                                 launchSingleTop = true
                                 restoreState = true
                             }
                         },
-                        onLongPress = {
-                            // Show delete confirmation
-                            geofenceToDelete = geofence
-                        },
+                        onLongPress = { geofenceToDelete = geofence },
                         onEdit = {
-                            // Show edit dialog
                             geofenceToEdit = geofence
-                            editName = geofence.name
-                            editRadius = geofence.radius
                         }
                     )
                 }
+                // Bottom spacing for nav bar
+                item { Spacer(Modifier.height(8.dp)) }
             }
         }
     }
+    
+    // ... (Dialogs remain same) ...
     
     // Delete confirmation dialog
     geofenceToDelete?.let { geofence ->
         AlertDialog(
             onDismissRequest = { geofenceToDelete = null },
-            title = { Text("Delete Geofence?") },
-            text = { Text("Do you want to delete \"${geofence.name}\"?\n\nThis will also delete all associated visit history.") },
+            title = { Text("Remove Zone?") },
+            text = { Text("Remove \"${geofence.name}\"? Visit history will be preserved.") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -115,9 +142,10 @@ fun GeofenceListScreen(
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
-                    )
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Delete")
+                    Text("Remove")
                 }
             },
             dismissButton = {
@@ -133,47 +161,101 @@ fun GeofenceListScreen(
         var editName by remember(geofenceToEdit) { mutableStateOf(geofence.name) }
         var editRadius by remember(geofenceToEdit) { mutableStateOf(geofence.radius) }
         var editIcon by remember(geofenceToEdit) { mutableStateOf(geofence.icon) }
+        var editEntryMessage by remember(geofenceToEdit) { mutableStateOf(geofence.entryMessage) }
+        var editExitMessage by remember(geofenceToEdit) { mutableStateOf(geofence.exitMessage) }
+        val haptic = LocalHapticFeedback.current
         
         AlertDialog(
             onDismissRequest = { geofenceToEdit = null },
-            title = { Text("Edit Geofence") },
+            title = { Text("Edit Zone") },
+            // Prevent system from auto-resizing for keyboard (causes shaking)
+            properties = DialogProperties(decorFitsSystemWindows = false),
             text = {
-                Column(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding() // Manually handle keyboard spacing
+                        .verticalScroll(rememberScrollState())
+                ) {
                     OutlinedTextField(
                         value = editName,
                         onValueChange = { editName = it },
-                        label = { Text("Location Name") },
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text("Zone name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     )
                     Spacer(Modifier.height(16.dp))
                     
-                    // Emoji Input
                     EmojiInput(
                         selectedEmoji = editIcon,
                         onEmojiChanged = { editIcon = it }
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     
-                    Text("Radius: ${editRadius.toInt()}m")
+                    Text(
+                        "Zone size: ${editRadius.toInt()}m",
+                        style = MaterialTheme.typography.titleSmall
+                    )
                     Slider(
                         value = editRadius,
-                        onValueChange = { editRadius = it.coerceIn(10f, 50f) },
+                        onValueChange = { editRadius = it },
+                        onValueChangeFinished = {
+                            editRadius = kotlin.math.round(editRadius)
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
                         valueRange = 10f..50f,
-                        steps = 39,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.tertiary,
+                            activeTrackColor = MaterialTheme.colorScheme.tertiary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                        )
                     )
-                    Text(
-                        "Radius: 10-50m",
-                        style = MaterialTheme.typography.bodySmall
+                    
+                    Spacer(Modifier.height(20.dp))
+                    
+                    TextField(
+                        value = editEntryMessage,
+                        onValueChange = { editEntryMessage = it },
+                        label = { Text("Arrival reminder") },
+                        placeholder = { Text("e.g. Take medicine") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    
+                    TextField(
+                        value = editExitMessage,
+                        onValueChange = { editExitMessage = it },
+                        label = { Text("Exit reminder") },
+                        placeholder = { Text("e.g. Lock the door") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+                        )
                     )
                     
                     Spacer(Modifier.height(16.dp))
                     
-                    // Change Location button
                     OutlinedButton(
                         onClick = { showLocationChangeOptions = true },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
+                        Icon(
+                            Icons.Outlined.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
                         Text("Change Location")
                     }
                 }
@@ -182,10 +264,18 @@ fun GeofenceListScreen(
                 Button(
                     onClick = {
                         if (editName.isNotBlank() && editRadius in 10f..50f) {
-                            viewModel.updateGeofence(geofence, editName, editRadius, editIcon)
+                            viewModel.updateGeofence(
+                                geofence, 
+                                editName, 
+                                editRadius, 
+                                editIcon,
+                                editEntryMessage,
+                                editExitMessage
+                            )
                             geofenceToEdit = null
                         }
-                    }
+                    },
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text("Save")
                 }
@@ -194,37 +284,37 @@ fun GeofenceListScreen(
                 TextButton(onClick = { geofenceToEdit = null }) {
                     Text("Cancel")
                 }
-            }
+            },
+            shape = RoundedCornerShape(16.dp) // Reduced radius
         )
     }
     
-    // Location change options dialog
+    // Location change options
     if (showLocationChangeOptions && geofenceToEdit != null) {
         AlertDialog(
             onDismissRequest = { showLocationChangeOptions = false },
             title = { Text("Change Location") },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
                             showLocationChangeOptions = false
-                            geofenceToEdit?.let { geofence ->
-                                navController.navigate("map?changeLocationForId=${geofence.id}")
-                            }
+                            geofenceToEdit?.let { navController.navigate("map?changeLocationForId=${it.id}") }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Drop Pin on Map")
                     }
-                    Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
                             showLocationChangeOptions = false
                             showManualLocationEntry = true
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Enter Coordinates Manually")
+                        Text("Enter Coordinates")
                     }
                 }
             },
@@ -237,31 +327,31 @@ fun GeofenceListScreen(
         )
     }
     
-    // Manual location entry dialog
+    // Manual location entry
     if (showManualLocationEntry && geofenceToEdit != null) {
         AlertDialog(
             onDismissRequest = { showManualLocationEntry = false },
-            title = { Text("Enter New Coordinates") },
+            title = { Text("Enter Coordinates") },
             text = {
-                Column(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = manualLat,
                         onValueChange = { manualLat = it },
                         label = { Text("Latitude") },
-                        placeholder = { Text("e.g., ${String.format("%.6f", geofenceToEdit!!.latitude)}") },
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text("e.g., ${String.format("%.4f", geofenceToEdit!!.latitude)}") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                    Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = manualLng,
                         onValueChange = { manualLng = it },
                         label = { Text("Longitude") },
-                        placeholder = { Text("e.g., ${String.format("%.6f", geofenceToEdit!!.longitude)}") },
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text("e.g., ${String.format("%.4f", geofenceToEdit!!.longitude)}") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                    Spacer(Modifier.height(8.dp))
                     Text(
-                        "Lat: -90 to 90 | Lng: -180 to 180",
+                        "Lat: -90 to 90 · Lng: -180 to 180",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -281,9 +371,10 @@ fun GeofenceListScreen(
                             manualLat = ""
                             manualLng = ""
                         }
-                    }
+                    },
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Update Location")
+                    Text("Update")
                 }
             },
             dismissButton = {
@@ -307,97 +398,74 @@ private fun GeofenceCard(
     onLongPress: () -> Unit,
     onEdit: () -> Unit
 ) {
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .animateContentSize()
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongPress
             ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(12.dp), // Architectural
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        // Micro-texture: No border, 1dp elevation
+        border = null,
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Emoji icon circle - Neutral now
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant), // Neutral
+                contentAlignment = Alignment.Center
             ) {
-                // Name
+                Text(
+                    text = geofence.icon.ifBlank { "📍" },
+                    fontSize = 22.sp
+                )
+            }
+            
+            Spacer(Modifier.width(14.dp))
+            
+            // Content
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = geofence.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                // Edit icon button
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        Icons.Default.Edit,
-                        contentDescription = "Edit",
-                        tint = MaterialTheme.colorScheme.primary
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${geofence.radius.toInt()}m radius",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f) // Structural opacity
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Coordinates
-            Text(
-                text = "Coordinates: ${String.format("%.6f", geofence.latitude)}, ${String.format("%.6f", geofence.longitude)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Radius
-            Text(
-                text = "Radius: ${geofence.radius.toInt()} meters",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Created date
-            val dateFormat = SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", Locale.getDefault())
-            Text(
-                text = "Created: ${dateFormat.format(Date(geofence.createdAt))}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Instructions
-            Text(
-                text = "Tap to view on map • Long-press to delete",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.tertiary
-            )
-        }
-    }
-}
-
-// Preview function
-@Preview(showBackground = true)
-@Composable
-private fun GeofenceCardPreview() {
-    MaterialTheme {
-        Column(modifier = Modifier.padding(16.dp)) {
-            GeofenceCard(
-                geofence = GeofenceEntity(
-                    id = 1,
-                    name = "Home",
-                    latitude = 37.7749,
-                    longitude = -122.4194,
-                    radius = 25f,
-                    createdAt = System.currentTimeMillis()
-                ),
-                onClick = {},
-                onLongPress = {},
-                onEdit = {}
-            )
+            // Edit button settings
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    Icons.Outlined.Edit,
+                    contentDescription = "Edit",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }

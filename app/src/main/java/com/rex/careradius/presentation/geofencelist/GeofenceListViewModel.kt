@@ -15,6 +15,8 @@ import kotlin.math.*
 
 // tags: viewmodel, geofence, list, manage
 class GeofenceListViewModel(
+    // WARNING: Context passed here should be Application context to avoid leaks
+    // In NavGraph currently passing LocalContext.current - acceptable for simple single-activity app
     private val context: Context,
     private val geofenceRepository: GeofenceRepository,
     private val visitRepository: VisitRepository,
@@ -51,7 +53,15 @@ class GeofenceListViewModel(
     }
     
     // tags: update, edit, radius
-    fun updateGeofence(geofence: GeofenceEntity, newName: String, newRadius: Float, newIcon: String) {
+    // tags: update, edit, radius
+    fun updateGeofence(
+        geofence: GeofenceEntity, 
+        newName: String, 
+        newRadius: Float, 
+        newIcon: String,
+        newEntryMessage: String,
+        newExitMessage: String
+    ) {
         viewModelScope.launch {
             // only close visit if radius shrinks and user is now outside
             if (newRadius < geofence.radius) {
@@ -59,7 +69,13 @@ class GeofenceListViewModel(
             }
             
             val iconValue = newIcon.ifBlank { "📍" }
-            val updated = geofence.copy(name = newName, radius = newRadius, icon = iconValue)
+            val updated = geofence.copy(
+                name = newName, 
+                radius = newRadius, 
+                icon = iconValue,
+                entryMessage = newEntryMessage,
+                exitMessage = newExitMessage
+            )
             geofenceRepository.insert(updated) // REPLACE mode
             
             // re-register with updated radius
@@ -115,14 +131,14 @@ class GeofenceListViewModel(
         }
     }
     
-    // haversine formula to calculate distance in meters
-    // https://rosettacode.org/wiki/Haversine_formula#Java
+    // Haversine formula
+    // Precise enough for geofencing (meters)
     private fun calculateDistance(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
         val earthRadius = 6371000.0 // meters
         val dLat = Math.toRadians(lat2 - lat1)
         val dLng = Math.toRadians(lng2 - lng1)
         val a = sin(dLat / 2).pow(2) + 
-                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)  //
+                cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return earthRadius * c
     }

@@ -16,5 +16,7 @@ data class GeofenceEntity(
     val longitude: Double,
     val radius: Float, // in meters (10-50m)
     val createdAt: Long, // timestamp
-    val icon: String = "📍" // Emoji/icon for marker display
+    val icon: String = "📍", // Emoji/icon for marker display
+    val entryMessage: String = "", // Custom message on entry
+    val exitMessage: String = "" // Custom message on exit
 )
