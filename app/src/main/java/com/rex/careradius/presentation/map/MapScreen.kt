@@ -1,25 +1,29 @@
 package com.rex.careradius.presentation.map
 
+import android.annotation.SuppressLint
 import android.os.Bundle
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.mapbox.mapboxsdk.Mapbox
 import com.mapbox.mapboxsdk.camera.CameraUpdateFactory
 import com.mapbox.mapboxsdk.geometry.LatLng
@@ -48,12 +52,13 @@ import kotlin.math.sin
 @Composable
 fun MapScreen(
     viewModel: MapViewModel,
+    modifier: Modifier = Modifier,
     targetLatitude: Double? = null,
     targetLongitude: Double? = null,
-    changeLocationForGeofenceId: Long? = null,
-    modifier: Modifier = Modifier
+    changeLocationForGeofenceId: Long? = null
 ) {
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val lifecycleOwner = LocalLifecycleOwner.current
     
     val geofences by viewModel.geofences.collectAsState()
@@ -69,6 +74,8 @@ fun MapScreen(
     val manualLat by viewModel.manualLat.collectAsState()
     val manualLng by viewModel.manualLng.collectAsState()
     val dropPinMode by viewModel.dropPinMode.collectAsState()
+    val entryMessage by viewModel.entryMessage.collectAsState()
+    val exitMessage by viewModel.exitMessage.collectAsState()
     
     // handle navigation to change location for existing geofence
     LaunchedEffect(changeLocationForGeofenceId) {
@@ -115,9 +122,11 @@ fun MapScreen(
                             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                                 if (PermissionsManager.areLocationPermissionsGranted(ctx)) {
                                     val locationComponent = map.locationComponent
+                                    @SuppressLint("MissingPermission")
                                     locationComponent.activateLocationComponent(
                                         LocationComponentActivationOptions.builder(ctx, style).build()
                                     )
+                                    @SuppressLint("MissingPermission")
                                     locationComponent.isLocationComponentEnabled = true
                                     locationComponent.cameraMode = CameraMode.TRACKING
                                     locationComponent.renderMode = RenderMode.GPS
@@ -153,13 +162,13 @@ fun MapScreen(
                                 // Add GeoJSON source + layers for radius circles
                                 style.addSource(GeoJsonSource(radiusSourceId))
                                 style.addLayer(FillLayer(radiusFillLayerId, radiusSourceId).withProperties(
-                                    PropertyFactory.fillColor("#4A90E2"),
-                                    PropertyFactory.fillOpacity(0.2f)
+                                    PropertyFactory.fillColor("#6CD0C2"), // Quiet Mint
+                                    PropertyFactory.fillOpacity(0.12f)
                                 ))
                                 style.addLayer(LineLayer(radiusLineLayerId, radiusSourceId).withProperties(
-                                    PropertyFactory.lineColor("#4A90E2"),
-                                    PropertyFactory.lineWidth(2f),
-                                    PropertyFactory.lineOpacity(0.8f)
+                                    PropertyFactory.lineColor("#5FB5BA"), // Desaturated Teal
+                                    PropertyFactory.lineWidth(1.5f),
+                                    PropertyFactory.lineOpacity(0.6f)
                                 ))
                                 
                                 symbolManager = SymbolManager(this, map, style).apply {
@@ -201,15 +210,7 @@ fun MapScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // add pin button
-                    FloatingActionButton(
-                        onClick = { viewModel.onAddPinClicked() },
-                        containerColor = MaterialTheme.colorScheme.primary
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Pin")
-                    }
-                    
-                    // my location button
+                    // My location — surfaceVariant (Neutral), Flat
                     FloatingActionButton(
                         onClick = {
                             mapboxMap?.locationComponent?.lastKnownLocation?.let { loc ->
@@ -217,9 +218,22 @@ fun MapScreen(
                                     CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 16.0)
                                 )
                             }
-                        }
+                        },
+                        containerColor = MaterialTheme.colorScheme.surface, // Grounded
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        elevation = FloatingActionButtonDefaults.elevation(2.dp)
                     ) {
                         Icon(Icons.Default.Place, contentDescription = "My Location")
+                    }
+                    
+                    // Add zone — Desaturated Primary + Elevated
+                    FloatingActionButton(
+                        onClick = { viewModel.onAddPinClicked() },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        elevation = FloatingActionButtonDefaults.elevation(4.dp) // Reduced elevation
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Zone")
                     }
                 }
             }
@@ -243,23 +257,24 @@ fun MapScreen(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .padding(16.dp),
-                    elevation = CardDefaults.cardElevation(8.dp)
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(4.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            "Position the pin by moving the map",
+                            "Move the map to position your zone",
                             style = MaterialTheme.typography.titleMedium
                         )
                         
                         val centerCoords = mapboxMap?.cameraPosition?.target
                         if (centerCoords != null) {
                             Text(
-                                "📍 ${String.format("%.6f", centerCoords.latitude)}, ${String.format("%.6f", centerCoords.longitude)}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
+                                "📍 ${String.format(java.util.Locale.US, "%.4f", centerCoords.latitude)}, ${String.format(java.util.Locale.US, "%.4f", centerCoords.longitude)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         
@@ -269,7 +284,8 @@ fun MapScreen(
                         ) {
                             OutlinedButton(
                                 onClick = { viewModel.onCancelDropPin() },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text("Cancel")
                             }
@@ -281,9 +297,10 @@ fun MapScreen(
                                         )
                                     }
                                 },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Text("Confirm")
+                                Text("Place Here")
                             }
                         }
                     }
@@ -299,9 +316,10 @@ fun MapScreen(
                         Lifecycle.Event.ON_STOP -> mapView?.onStop()
                         Lifecycle.Event.ON_DESTROY -> {
                             try {
+                                @SuppressLint("MissingPermission")
                                 mapboxMap?.locationComponent?.isLocationComponentEnabled = false
                                 mapboxMap?.locationComponent?.compassEngine = null
-                            } catch (e: Exception) { }
+                            } catch (_: Exception) { }
                             mapView?.onDestroy()
                             mapView = null
                             mapboxMap = null
@@ -313,14 +331,15 @@ fun MapScreen(
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
                     try {
+                        @SuppressLint("MissingPermission")
                         mapboxMap?.locationComponent?.isLocationComponentEnabled = false
                         mapboxMap?.locationComponent?.compassEngine = null
-                    } catch (e: Exception) { }
+                    } catch (_: Exception) { }
                     lifecycleOwner.lifecycle.removeObserver(observer)
                     try {
                         symbolManager?.deleteAll()
                         symbolManager = null
-                    } catch (e: Exception) {}
+                    } catch (_: Exception) {}
                     mapView?.onLowMemory()
                     mapView?.onDestroy()
                     mapView = null
@@ -334,25 +353,25 @@ fun MapScreen(
     if (showAddPinDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.onAddPinDialogDismiss() },
-            title = { Text("Add Geofence Pin") },
+            title = { Text("Add Zone") },
             text = {
-                Column {
-                    Text("Choose how to add a new geofence:")
-                    Spacer(Modifier.height(16.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Choose how to place your zone:")
                     Button(
                         onClick = {
                             viewModel.onDropPinHere(LocationCoordinates(0.0, 0.0))
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Text("Drop Pin on Map")
                     }
-                    Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = { viewModel.onEnterCoordinates() },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Enter Coordinates Manually")
+                        Text("Enter Coordinates")
                     }
                 }
             },
@@ -412,24 +431,35 @@ fun MapScreen(
     if (showDialog && selectedLocation != null) {
         AlertDialog(
             onDismissRequest = { viewModel.onDialogDismiss() },
-            title = { Text(if (editingGeofence != null) "Edit Geofence" else "Add Geofence") },
+            title = { Text(if (editingGeofence != null) "Edit Zone" else "New Zone") },
+            // Prevent system from auto-resizing for keyboard (causes shaking)
+            properties = DialogProperties(decorFitsSystemWindows = false),
             text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Location: ${selectedLocation!!.latitude.format(4)}, ${selectedLocation!!.longitude.format(4)}")
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding() // Manually handle keyboard spacing
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        "📍 ${selectedLocation!!.latitude.format(4)}, ${selectedLocation!!.longitude.format(4)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Spacer(Modifier.height(16.dp))
                     
-                    // emoji picker
                     EmojiInput(
                         selectedEmoji = icon,
                         onEmojiChanged = { viewModel.onIconChange(it) }
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
                     
                     OutlinedTextField(
                         value = geofenceName,
                         onValueChange = { viewModel.onNameChange(it) },
-                        label = { Text("Location Name") },
+                        label = { Text("Zone name") },
                         modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
                         supportingText = {
                             if (geofenceName.isBlank()) {
                                 Text("Name is required", color = MaterialTheme.colorScheme.error)
@@ -438,26 +468,54 @@ fun MapScreen(
                         isError = geofenceName.isBlank()
                     )
                     Spacer(Modifier.height(16.dp))
-                    Text("Radius: ${radius.toInt()}m")
+                    Text(
+                        "Zone size: ${radius.toInt()}m",
+                        style = MaterialTheme.typography.titleSmall
+                    )
                     Slider(
                         value = radius,
                         onValueChange = { viewModel.onRadiusChange(it) },
+                        onValueChangeFinished = {
+                            viewModel.onRadiusChange(kotlin.math.round(radius))
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        },
                         valueRange = 10f..50f,
-                        steps = 39,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.tertiary,
+                            activeTrackColor = MaterialTheme.colorScheme.tertiary, // Thinner track appearance handled by defaults usually, effectively reducing visual noise by removing ticks if any
+                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant
+                        )
                     )
-                    Text(
-                        "Radius must be between 10m and 50m",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (radius !in 10f..50f) MaterialTheme.colorScheme.error 
-                               else MaterialTheme.colorScheme.onSurfaceVariant
+                    Spacer(Modifier.height(20.dp))
+                    
+                    OutlinedTextField(
+                        value = entryMessage,
+                        onValueChange = { viewModel.onEntryMessageChange(it) },
+                        label = { Text("Arrival reminder") }, // Shortened label
+                        placeholder = { Text("e.g. Take medicine") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = exitMessage,
+                        onValueChange = { viewModel.onExitMessageChange(it) },
+                        label = { Text("Exit reminder") }, // Shortened label
+                        placeholder = { Text("e.g. Lock the door") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = { viewModel.onAddGeofence() },
-                    enabled = isAddButtonEnabled
+                    enabled = isAddButtonEnabled,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(if (editingGeofence != null) "Update" else "Add")
                 }
@@ -466,7 +524,8 @@ fun MapScreen(
                 TextButton(onClick = { viewModel.onDialogDismiss() }) {
                     Text("Cancel")
                 }
-            }
+            },
+            shape = RoundedCornerShape(16.dp) // Reduced from default 28dp to 16dp
         )
     }
 }
@@ -494,15 +553,16 @@ fun EmojiInput(
         }
     )
 }
-
+            
 // tags: marker, bitmap, emoji, render
-private fun createMarkerBitmap(label: String, context: android.content.Context, size: Int = 80): android.graphics.Bitmap {
+@Suppress("UNUSED_PARAMETER")
+private fun createMarkerBitmap(label: String, context: android.content.Context, size: Int = 48): android.graphics.Bitmap { // Reduced size (64 -> 48) for precision
     val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(bitmap)
     
     val textPaint = android.text.TextPaint().apply {
         isAntiAlias = true
-        textSize = size * 0.7f
+        textSize = size * 0.75f // Slightly larger emoji ratio
         textAlign = android.graphics.Paint.Align.CENTER
     }
     
@@ -512,7 +572,7 @@ private fun createMarkerBitmap(label: String, context: android.content.Context, 
             if (codePointCount > 0) {
                 label.substring(0, label.offsetByCodePoints(0, 1))
             } else label.take(1)
-        } catch (e: Exception) { label.take(1) }
+        } catch (_: Exception) { label.take(1) }
     } else "📍"
     
     val staticLayout = android.text.StaticLayout.Builder

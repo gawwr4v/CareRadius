@@ -68,6 +68,12 @@ class MapViewModel(
     
     private val _icon = MutableStateFlow("📍")
     val icon: StateFlow<String> = _icon.asStateFlow()
+
+    private val _entryMessage = MutableStateFlow("")
+    val entryMessage: StateFlow<String> = _entryMessage.asStateFlow()
+
+    private val _exitMessage = MutableStateFlow("")
+    val exitMessage: StateFlow<String> = _exitMessage.asStateFlow()
     
     // Validation
     val isAddButtonEnabled: StateFlow<Boolean> = combine(
@@ -97,6 +103,9 @@ class MapViewModel(
         // Reset form
         _geofenceName.value = ""
         _radius.value = 30f
+        _icon.value = "📍"
+        _entryMessage.value = ""
+        _exitMessage.value = ""
     }
     
     // Add Pin button clicked
@@ -152,8 +161,12 @@ class MapViewModel(
             // New geofence - show creation dialog
             _showDialog.value = true
             _editingGeofence.value = null
+            _editingGeofence.value = null
             _geofenceName.value = ""
             _radius.value = 30f
+            _icon.value = "📍"
+            _entryMessage.value = ""
+            _exitMessage.value = ""
         }
     }
     
@@ -196,8 +209,12 @@ class MapViewModel(
             _showCoordinateDialog.value = false
             _showDialog.value = true
             _editingGeofence.value = null
+            _editingGeofence.value = null
             _geofenceName.value = ""
             _radius.value = 30f
+            _icon.value = "📍"
+            _entryMessage.value = ""
+            _exitMessage.value = ""
         }
     }
     
@@ -211,6 +228,8 @@ class MapViewModel(
                 _geofenceName.value = it.name
                 _radius.value = it.radius
                 _icon.value = it.icon
+                _entryMessage.value = it.entryMessage
+                _exitMessage.value = it.exitMessage
                 _showDialog.value = true
             }
         }
@@ -228,6 +247,14 @@ class MapViewModel(
     fun onRadiusChange(radius: Float) {
         _radius.value = radius.coerceIn(10f, 50f)
     }
+
+    fun onEntryMessageChange(message: String) {
+        _entryMessage.value = message
+    }
+
+    fun onExitMessageChange(message: String) {
+        _exitMessage.value = message
+    }
     
     fun onDialogDismiss() {
         _showDialog.value = false
@@ -240,6 +267,8 @@ class MapViewModel(
         val name = _geofenceName.value
         val radiusValue = _radius.value
         val iconValue = _icon.value.ifBlank { "📍" }  // Default to pin if blank
+        val entryMsg = _entryMessage.value
+        val exitMsg = _exitMessage.value
         
         if (name.isBlank() || radiusValue !in 10f..50f) {
             return
@@ -253,7 +282,9 @@ class MapViewModel(
                 val updated = editingGeofenceValue.copy(
                     name = name,
                     radius = radiusValue,
-                    icon = iconValue
+                    icon = iconValue,
+                    entryMessage = entryMsg,
+                    exitMessage = exitMsg
                 )
                 geofenceRepository.insert(updated) // REPLACE mode
                 
@@ -273,7 +304,9 @@ class MapViewModel(
                     longitude = location.longitude,
                     radius = radiusValue,
                     createdAt = System.currentTimeMillis(),
-                    icon = iconValue
+                    icon = iconValue,
+                    entryMessage = entryMsg,
+                    exitMessage = exitMsg
                 )
                 
                 val geofenceId = geofenceRepository.insert(geofence)
