@@ -40,7 +40,7 @@ class NotificationHelper(private val context: Context) {
         }
     }
     
-    fun showGeofenceNotification(geofenceName: String, eventType: String, notificationId: Int = NOTIFICATION_ID_BASE) {
+    fun showGeofenceNotification(geofenceName: String, eventType: String, notificationId: Int = NOTIFICATION_ID_BASE, customMessage: String? = null) {
         // Check notification permission on Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -53,7 +53,13 @@ class NotificationHelper(private val context: Context) {
         }
         
         val title = "Geofence Event"
-        val message = "$eventType: $geofenceName"
+        
+        // Use custom message if provided, otherwise standard warm text without emojis
+        val message = if (!customMessage.isNullOrBlank()) {
+            customMessage
+        } else {
+            if (eventType == "Entered") "Arrived at $geofenceName" else "Left $geofenceName"
+        }
         
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Will use default launcher icon
@@ -61,6 +67,7 @@ class NotificationHelper(private val context: Context) {
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message)) // Expandable for long custom messages
             .build()
         
         NotificationManagerCompat.from(context).notify(notificationId, notification)

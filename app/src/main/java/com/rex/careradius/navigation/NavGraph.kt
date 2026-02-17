@@ -17,67 +17,71 @@ import com.rex.careradius.presentation.geofencelist.GeofenceListScreen
 import com.rex.careradius.presentation.geofencelist.GeofenceListViewModel
 import com.rex.careradius.presentation.map.MapScreen
 import com.rex.careradius.presentation.map.MapViewModel
+import com.rex.careradius.presentation.settings.SettingsScreen
+import com.rex.careradius.presentation.settings.SettingsViewModel
 import com.rex.careradius.presentation.visitlist.VisitListScreen
 import com.rex.careradius.presentation.visitlist.VisitListViewModel
 import com.rex.careradius.system.geofence.GeofenceManager
 
 /**
- * Navigation routes for the app
+ * Central Navigation Hub
+ * Defines routes and dependency injection for screens
  */
 sealed class Screen(val route: String) {
     object Map : Screen("map")
     object GeofenceList : Screen("geofence_list")
     object VisitList : Screen("visit_list")
+    object Settings : Screen("settings")
 }
 
-/**
- * Navigation graph setup
- */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun NavGraph(
     navController: NavHostController,
     database: AppDatabase,
-    geofenceManager: GeofenceManager
+    geofenceManager: GeofenceManager,
+    settingsViewModel: SettingsViewModel
 ) {
+    // Repositories
+    // remember {} keeps them alive across recompositions, but they rebuild on config change
+    // simpler than creating a full AppContainer for this size app
     val geofenceRepository = remember { GeofenceRepository(database.geofenceDao()) }
     val visitRepository = remember { VisitRepository(database.visitDao()) }
     
+    // ViewModels
+    // NOTE: Using remember {} means these are NOT Lifecycle-aware ViewModels
+    // They will reset on rotation. For production, use viewModel<T>() factory.
+    // Keeping as-is to preserve existing architecture constraints for now , will work on this later :D
+    val visitListViewModel = remember { VisitListViewModel(visitRepository) }
+
     NavHost(
         navController = navController,
         startDestination = Screen.Map.route,
+        // Smooth slide/fade transitions
         enterTransition = {
-            fadeIn(animationSpec = tween(300))
+            slideInHorizontally(initialOffsetX = { it / 15 }, animationSpec = tween(180)) + 
+            fadeIn(animationSpec = tween(180))
         },
         exitTransition = {
-            fadeOut(animationSpec = tween(300))
+            slideOutHorizontally(targetOffsetX = { -it / 15 }, animationSpec = tween(180)) + 
+            fadeOut(animationSpec = tween(180))
         },
         popEnterTransition = {
-            fadeIn(animationSpec = tween(300))
+            slideInHorizontally(initialOffsetX = { -it / 15 }, animationSpec = tween(180)) + 
+            fadeIn(animationSpec = tween(180))
         },
         popExitTransition = {
-            fadeOut(animationSpec = tween(300))
+            slideOutHorizontally(targetOffsetX = { it / 15 }, animationSpec = tween(180)) + 
+            fadeOut(animationSpec = tween(180))
         }
     ) {
-        // Map screen - supports optional coordinates for centering
+        // Map: Optional coordinates for deep linking/centering
         composable(
             route = "map?lat={lat}&lng={lng}&changeLocationForId={changeLocationForId}",
             arguments = listOf(
-                navArgument("lat") { 
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument("lng") { 
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument("changeLocationForId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
+                navArgument("lat") { type = NavType.StringType; nullable = true },
+                navArgument("lng") { type = NavType.StringType; nullable = true },
+                navArgument("changeLocationForId") { type = NavType.StringType; nullable = true }
             )
         ) { backStackEntry ->
             val lat = backStackEntry.arguments?.getString("lat")?.toDoubleOrNull()
@@ -85,6 +89,7 @@ fun NavGraph(
             val changeLocationForId = backStackEntry.arguments?.getString("changeLocationForId")?.toLongOrNull()
             
             val viewModel = remember { MapViewModel(geofenceRepository, geofenceManager) }
+            
             MapScreen(
                 viewModel = viewModel,
                 targetLatitude = lat,
@@ -95,7 +100,10 @@ fun NavGraph(
         
         composable(Screen.GeofenceList.route) {
             val context = LocalContext.current
-            val viewModel = remember { GeofenceListViewModel(context, geofenceRepository, visitRepository, geofenceManager) }
+            // warning: passing context to VM can leak if not careful, usage seems scoped to logic here
+            val viewModel = remember { 
+                GeofenceListViewModel(context, geofenceRepository, visitRepository, geofenceManager) 
+            }
             GeofenceListScreen(
                 viewModel = viewModel,
                 navController = navController
@@ -103,8 +111,11 @@ fun NavGraph(
         }
         
         composable(Screen.VisitList.route) {
-            val viewModel = remember { VisitListViewModel(visitRepository) }
-            VisitListScreen(viewModel = viewModel)
+            VisitListScreen(viewModel = visitListViewModel)
+        }
+        
+        composable(Screen.Settings.route) {
+            SettingsScreen(viewModel = settingsViewModel)
         }
     }
 }

@@ -17,7 +17,7 @@ import com.rex.careradius.data.local.entity.VisitEntity
  */
 @Database(
     entities = [GeofenceEntity::class, VisitEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,7 +36,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "careradius_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
                 INSTANCE = instance
                 instance
@@ -89,6 +89,14 @@ abstract class AppDatabase : RoomDatabase() {
                 
                 // Recreate index
                 database.execSQL("CREATE INDEX index_visits_geofenceId ON visits(geofenceId)")
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add entryMessage and exitMessage columns
+                database.execSQL("ALTER TABLE geofences ADD COLUMN entryMessage TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE geofences ADD COLUMN exitMessage TEXT NOT NULL DEFAULT ''")
             }
         }
     }
