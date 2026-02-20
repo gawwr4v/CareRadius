@@ -28,12 +28,15 @@ local.properties
 # Proguard folder
 proguard/
 
-# Log Files
+# All .log files anywhere
 *.log
-build_log*.txt
-build_output.txt
-build_out.txt
-/build_output_utf8.txt
+/log.txt
+
+# Root-level log txt files
+/*_log*.txt
+
+# Build logs
+build_*.txt
 
 # Android Studio Navigation editor temp files
 .navigation/
