@@ -57,7 +57,7 @@ fun GeofenceListScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            PageHeader(title = "Your safe zones")
+            PageHeader(title = "Zones")
             
             if (geofences.isNotEmpty()) {
                 Surface(
@@ -409,11 +409,11 @@ private fun GeofenceCard(
             ),
         shape = RoundedCornerShape(12.dp), // Architectural
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
-        // Micro-texture: No border, 1dp elevation
-        border = null,
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        // Micro-texture: 1dp neutral border, 0dp elevation
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -424,7 +424,7 @@ private fun GeofenceCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant), // Neutral
+                    .background(MaterialTheme.colorScheme.background), // Neutral
                 contentAlignment = Alignment.Center
             ) {
                 Text(

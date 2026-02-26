@@ -19,6 +19,12 @@ interface GeofenceDao {
     @Query("SELECT * FROM geofences WHERE id = :geofenceId")
     suspend fun getGeofenceById(geofenceId: Long): GeofenceEntity?
     
+    @Query("SELECT * FROM geofences WHERE name = :name LIMIT 1")
+    suspend fun getGeofenceByName(name: String): GeofenceEntity?
+    
     @Delete
     suspend fun delete(geofence: GeofenceEntity)
+
+    @Query("DELETE FROM geofences")
+    suspend fun deleteAllGeofences()
 }
