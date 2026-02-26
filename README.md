@@ -1,14 +1,15 @@
 # CareRadius 📍
 
-![Platform: Android](https://img.shields.io/badge/Platform-Android-green)
-![Min API: 29+](https://img.shields.io/badge/Min%20API-29%2B-blue)
-![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?logo=kotlin)
-![Jetpack Compose](https://img.shields.io/badge/Jetpack-Compose-blue?logo=android)
-![Architecture: MVVM](https://img.shields.io/badge/Architecture-MVVM-orange)
-![Room Database](https://img.shields.io/badge/Database-Room-9C27B0)
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
-![Version](https://img.shields.io/badge/Version-1.4-brightgreen)
+<img src="https://img.shields.io/badge/Platform-Android-green" alt="Platform: Android" style="pointer-events:none;" />
+<img src="https://img.shields.io/badge/Min%20API-29%2B-blue" alt="Min API: 29+" style="pointer-events:none;" />
+<img src="https://img.shields.io/badge/Version-1.4-brightgreen" alt="Version 1.4" style="pointer-events:none;" />
 
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?logo=kotlin)](https://kotlinlang.org/docs/home.html)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack-Compose-blue?logo=android)](https://developer.android.com/jetpack/compose)
+
+<img src="https://img.shields.io/badge/Architecture-MVVM-orange" alt="Architecture: MVVM" style="pointer-events:none;" />
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://opensource.org/licenses/MIT)
 A geofencing Android application that tracks your visits to specific locations. Set up virtual boundaries around places you care about and automatically log when you enter and exit.
 
 ## Features
