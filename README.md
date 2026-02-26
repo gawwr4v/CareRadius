@@ -1,5 +1,14 @@
 # CareRadius 📍
 
+![Platform: Android](https://img.shields.io/badge/Platform-Android-green)
+![Min API: 29+](https://img.shields.io/badge/Min%20API-29%2B-blue)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?logo=kotlin)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack-Compose-blue?logo=android)
+![Architecture: MVVM](https://img.shields.io/badge/Architecture-MVVM-orange)
+![Room Database](https://img.shields.io/badge/Database-Room-9C27B0)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow)
+![Version](https://img.shields.io/badge/Version-1.4-brightgreen)
+
 A geofencing Android application that tracks your visits to specific locations. Set up virtual boundaries around places you care about and automatically log when you enter and exit.
 
 ## Features
@@ -21,7 +30,8 @@ A geofencing Android application that tracks your visits to specific locations. 
 - **Custom Reminders** - Set personalized arrival and exit messages per zone (e.g. "Take medicine", "Lock the door")
 - **Entry Alerts** - Get notified when you enter a geofenced area
 - **Exit Alerts** - Get notified when you leave a geofenced area
-- **Background Monitoring** - Works even when app is closed (will cost you some battery though)
+- **Background Monitoring** - Foreground service keeps tracking alive even when app is closed
+- **Persistent Notification** - Shows "CareRadius - Monitoring your zones" while tracking is active
 
 ### ⏱️ Visit History
 - **Automatic Tracking** - Entry/exit times recorded automatically
@@ -34,8 +44,12 @@ A geofencing Android application that tracks your visits to specific locations. 
 ### ⚙️ Settings
 - **Dark / Light Theme** - Toggle between dark and light mode with preference persistence
 - **Theme Follows System** - Defaults to system theme on first launch
+- **Location Check Interval** - Choose how often the service checks your location (1 min, 2 min, 5 min)
+- **Background Reliability** - Quick access to app battery settings for unrestricted mode
+- **Notification Toggle** - Enable or disable arrival and exit alerts
 
 ### 💾 Data Management
+- **JSON Export / Import** - Export all zones and visits as JSON, import with Replace or Merge strategies
 - **Persistent Storage** - All data saved locally using Room database
 - **Offline Support** - Works without internet connection
 
@@ -76,9 +90,10 @@ A geofencing Android application that tracks your visits to specific locations. 
 | **Jetpack Compose** | Modern declarative UI |
 | **Material 3** | UI components & theming (Nordic Utility design system) |
 | **Room** | Local SQLite database |
-| **DataStore** | User preferences (theme) |
+| **DataStore** | User preferences (theme, notifications, polling interval) |
 | **MapLibre GL** | OpenStreetMap-based maps |
-| **Google Play Services** | Geofencing & Location APIs |
+| **Google Play Services** | FusedLocationProviderClient for location polling |
+| **Foreground Service** | Keeps the app alive for reliable background tracking |
 | **Coroutines & Flow** | Async operations & reactive data |
 | **Navigation Compose** | Screen navigation with animated transitions |
 
@@ -109,7 +124,7 @@ The app follows **MVVM (Model-View-ViewModel)** architecture with a **Repository
                                     ↓
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                            System Layer                                 │
-│    GeofenceManager  │  GeofenceReceiver  │  NotificationHelper          │
+│  GeofenceTrackingService │ GeofenceManager │ GeofenceReceiver │ Notifs  │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,7 +143,7 @@ app/src/main/java/com/rex/careradius/
 │   └── repository/           # Data repositories
 │       ├── GeofenceRepository.kt
 │       ├── VisitRepository.kt
-│       └── UserPreferencesRepository.kt  # DataStore for theme
+│       └── UserPreferencesRepository.kt  # DataStore for theme, notifications, polling interval
 ├── domain/
 │   └── model/                # Domain/UI models
 │       ├── GeofenceModel.kt
@@ -152,8 +167,10 @@ app/src/main/java/com/rex/careradius/
 │       └── VisitListViewModel.kt
 ├── system/
 │   ├── geofence/
-│   │   ├── GeofenceManager.kt    # Register/unregister geofences
-│   │   └── GeofenceReceiver.kt   # BroadcastReceiver for transitions
+│   │   ├── GeofenceManager.kt           # Register/unregister geofences, stale visit reconciliation
+│   │   ├── GeofenceReceiver.kt          # BroadcastReceiver for transitions (backup)
+│   │   ├── GeofenceTrackingService.kt   # Foreground service, polls location and checks zones
+│   │   └── GeofenceBootReceiver.kt      # Re-registers geofences and restarts service after reboot
 │   ├── location/
 │   │   └── LocationPermissionHandler.kt
 │   └── notification/
@@ -196,16 +213,22 @@ app/src/main/java/com/rex/careradius/
 ```
 User creates geofence → Saved to Room DB → Registered with GeofencingClient
                                                     ↓
-                              GeofenceReceiver triggered on ENTER/EXIT
+                  GeofenceTrackingService polls location every N seconds
                                                     ↓
-                        Visit record created/updated → Notification sent
+              Checks distance to all zones → Creates/closes visits → Sends notifications
 ```
 
 ### Background Processing
-The `GeofenceReceiver` is a `BroadcastReceiver` that handles transitions even when the app is closed:
-- Creates visit records with geofence name on **ENTER**
-- Calculates duration and updates records on **EXIT**
-- Sends notifications for both events
+The app uses a **foreground service** (`GeofenceTrackingService`) for reliable background tracking:
+- Polls device location at a user-configurable interval (1 min, 2 min, or 5 min)
+- Compares current position against all registered geofence radii
+- Creates visit records on **ENTER**, closes them with duration on **EXIT**
+- Sends notifications for both events (if enabled)
+- Uses `START_STICKY` to auto-restart if the OS kills the service
+- Restarts after device reboot via `GeofenceBootReceiver`
+
+**Why not rely on Google Play Services geofencing alone?**
+Google's `GeofencingClient` delivers transitions via `PendingIntent`, but on many devices these broadcasts are silently dropped when the app is in the background. The foreground service ensures the app process stays alive and handles detection directly.
 
 ### Data Persistence
 All data is stored in a local Room database with proper migrations:
@@ -224,15 +247,18 @@ All data is stored in a local Room database with proper migrations:
 | `ACCESS_FINE_LOCATION` | Precise location for geofencing |
 | `ACCESS_BACKGROUND_LOCATION` | Monitor geofences when app is closed |
 | `POST_NOTIFICATIONS` | Show entry/exit notifications |
+| `FOREGROUND_SERVICE` | Run persistent tracking service |
+| `FOREGROUND_SERVICE_LOCATION` | Allow location access in foreground service |
+| `RECEIVE_BOOT_COMPLETED` | Re-register geofences and restart service after reboot |
 
 ## Geofencing Best Practices
 
 For reliable geofence detection:
 
-1. **Minimum Radius** - Android recommends 100m+ for reliable triggers. This app allows 10–50m for precise tracking, but detection may be less consistent at smaller radii
-2. **Battery Optimization** - Disable for this app (Settings → Apps → Battery → Unrestricted)
+1. **Minimum Radius** - Android recommends 100m+ for reliable triggers. This app allows 10-50m for precise tracking, but detection may be less consistent at smaller radii
+2. **Battery Optimization** - Set to Unrestricted (Settings > Apps > CareRadius > Battery > Unrestricted) for best results
 3. **Location Mode** - Use "High Accuracy" GPS mode
-4. **Physical Movement** - GPS jitter doesn't trigger events; real movement required
+4. **Polling Interval** - Use 1 min or 2 min for faster detection. 5 min saves battery but delays detection
 
 ## Database Migrations
 
