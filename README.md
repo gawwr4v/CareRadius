@@ -6,7 +6,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?logo=kotlin)](https://kotlinlang.org/docs/home.html)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack-Compose-blue?logo=android)](https://developer.android.com/jetpack/compose)
 [![Architecture: MVVM](https://img.shields.io/badge/Architecture-MVVM-orange)](#)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENCE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 
 A geofencing Android application that tracks your visits to specific locations. Set up virtual boundaries around places you care about and automatically log when you enter and exit.
 
