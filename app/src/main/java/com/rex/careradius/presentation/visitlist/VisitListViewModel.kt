@@ -2,38 +2,36 @@ package com.rex.careradius.presentation.visitlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.rex.careradius.data.repository.VisitRepository
-import com.rex.careradius.domain.model.VisitModel
+import com.rex.careradius.data.local.dao.VisitDao
+import com.rex.careradius.data.local.entity.VisitWithGeofence
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 /**
- * ViewModel for Visit List Screen
- * Displays visit history with geofence details
+ * ViewModel for Visit List
+ * NOTE: Currently instanced via remember {} in NavGraph
+ * Future Refactor: Convert to Hilt/Factory injections if app grows
  */
 class VisitListViewModel(
-    private val visitRepository: VisitRepository
+    private val visitDao: VisitDao
 ) : ViewModel() {
     
-    val visits: StateFlow<List<VisitModel>> = visitRepository.getAllVisitsWithGeofence()
-        .map { visitList ->
-            visitList.map { VisitModel.fromVisitWithGeofence(it) }
-        }
+    val visits: StateFlow<List<VisitWithGeofence>> = visitDao.getAllVisitsWithGeofence()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(60_000),
             initialValue = emptyList()
         )
     
     fun clearHistory() {
         viewModelScope.launch {
-            visitRepository.clearAllVisits()
+            visitDao.deleteCompletedVisits()
         }
     }
     
     fun deleteVisit(visitId: Long) {
         viewModelScope.launch {
-            visitRepository.deleteVisit(visitId)
+            visitDao.deleteVisit(visitId)
         }
     }
 }

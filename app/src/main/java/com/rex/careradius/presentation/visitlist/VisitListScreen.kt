@@ -1,21 +1,28 @@
 package com.rex.careradius.presentation.visitlist
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.rex.careradius.domain.model.VisitModel
+import androidx.compose.ui.unit.sp
+import com.rex.careradius.data.local.entity.VisitWithGeofence
+import com.rex.careradius.presentation.components.PageHeader
 
-/**
- * Visit List Screen - Displays visit history with entry/exit times and duration
- */
 @Composable
 fun VisitListScreen(
     viewModel: VisitListViewModel,
@@ -24,23 +31,23 @@ fun VisitListScreen(
     val visits by viewModel.visits.collectAsState()
     var showClearDialog by remember { mutableStateOf(false) }
     
-    // Clear History Confirmation Dialog
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            title = { Text("Clear History?") },
-            text = { Text("This will permanently delete all visit records. This action cannot be undone.") },
+            title = { Text("Clear local history?") },
+            text = { Text("This action cannot be undone.") },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         viewModel.clearHistory()
                         showClearDialog = false
                     },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Clear All")
+                    Text("Clear")
                 }
             },
             dismissButton = {
@@ -52,60 +59,71 @@ fun VisitListScreen(
     }
     
     Column(modifier = modifier.fillMaxSize()) {
-        // Header with Clear button
-        Surface(
+        // Standardized Header
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.primaryContainer
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Visit History (${visits.size})",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                
-                if (visits.isNotEmpty()) {
-                    IconButton(
-                        onClick = { showClearDialog = true }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Clear History",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
+            PageHeader(title = "Activity")
+            
+            if (visits.isNotEmpty()) {
+                TextButton(
+                    onClick = { showClearDialog = true },
+                    modifier = Modifier.padding(end = 16.dp) // Adjusted padding, removed top
+                ) {
+                    Text(
+                        text = "CLEAR",
+                        style = MaterialTheme.typography.labelLarge, // Larger
+                        fontWeight = FontWeight.Bold, // Bolder
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
                 }
             }
         }
         
         if (visits.isEmpty()) {
-            // Empty state
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "No visits recorded yet.\nEnter a geofenced area to record a visit.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Improved "No Activity" State
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant, // Neutral
+                        modifier = Modifier.size(80.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("⏱️", fontSize = 32.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "No activity recorded",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Visits will appear here automatically\nwhen you enter or leave a zone.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         } else {
-            // List of visits
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(visits, key = { it.visitId }) { visit ->
+                items(visits, key = { it.visit.id }) { visit ->
                     VisitCard(
                         visit = visit,
-                        onDelete = { viewModel.deleteVisit(visit.visitId) }
+                        onDelete = { viewModel.deleteVisit(visit.visit.id) }
                     )
                 }
             }
@@ -113,30 +131,41 @@ fun VisitListScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VisitCard(
-    visit: VisitModel,
+    visit: VisitWithGeofence,
     onDelete: () -> Unit = {}
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     
-    // Delete confirmation dialog
     if (showDeleteDialog) {
+        val isActive = visit.visit.exitTime == null
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Visit?") },
-            text = { Text("Delete this visit record for ${visit.geofenceName}?") },
+            title = { 
+                Text(if (isActive) "You\u2019re currently here" else "Delete Record?") 
+            },
+            text = { 
+                Text(
+                    if (isActive) 
+                        "You\u2019re still inside ${visit.geofenceName}. Deleting this will stop tracking this visit."
+                    else 
+                        "Remove this activity record?"
+                ) 
+            },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         onDelete()
                         showDeleteDialog = false
                     },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    ),
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Text("Delete")
+                    Text(if (isActive) "Delete Anyway" else "Delete")
                 }
             },
             dismissButton = {
@@ -147,176 +176,192 @@ private fun VisitCard(
         )
     }
     
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (visit.exitTime == null) {
-                MaterialTheme.colorScheme.secondaryContainer  // Highlight active visits
+    val isActive = visit.visit.exitTime == null
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = {
+            if (it == SwipeToDismissBoxValue.EndToStart) {
+                showDeleteDialog = true
+                false // Don't dismiss immediately, wait for dialog
             } else {
-                MaterialTheme.colorScheme.surfaceVariant
+                false 
             }
-        )
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Geofence name and badges
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        },
+        positionalThreshold = { it * 0.25f }
+    )
+    
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val color = MaterialTheme.colorScheme.errorContainer
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(MaterialTheme.shapes.medium)
+                    .background(color)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Delete,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        },
+        content = {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize(),
+                shape = MaterialTheme.shapes.medium, // 8dp
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline) // 1dp Neutral Border
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text(
-                        text = visit.geofenceName,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val icon = visit.geofenceIcon.ifBlank { "📍" }
+                        Text(icon, fontSize = 20.sp)
+                    }
+                    
+                    Spacer(Modifier.width(16.dp))
+                    
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = visit.geofenceName,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            
+                            if (visit.isGeofenceDeleted) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "(zone removed)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Spacer(Modifier.height(8.dp))
+                        
+                        if (isActive) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Static dot
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "At ${visit.geofenceName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "Since ${visit.formattedEntryTime}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        } else {
+                            Text(
+                                text = visit.formattedDate,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "${visit.formattedEntryTime} – ${visit.formattedExitTime}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                            if (visit.visit.durationMillis != null) {
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = visit.formattedDuration,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, name = "Visit Card Light")
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES, name = "Visit Card Dark")
+@Composable
+private fun VisitCardPreview() {
+    com.rex.careradius.ui.theme.CareRadiusTheme {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // active visit, currently inside a zone
+            VisitCard(
+                visit = com.rex.careradius.data.local.entity.VisitWithGeofence(
+                    visit = com.rex.careradius.data.local.entity.VisitEntity(
+                        id = 1,
+                        geofenceId = 1,
+                        geofenceName = "Home",
+                        entryTime = System.currentTimeMillis() - 3_600_000,
+                        exitTime = null,
+                        durationMillis = null
+                    ),
+                    geofence = com.rex.careradius.data.local.entity.GeofenceEntity(
+                        id = 1,
+                        name = "Home",
+                        latitude = 28.6139,
+                        longitude = 77.2090,
+                        radius = 30f,
+                        createdAt = System.currentTimeMillis(),
+                        icon = "🏠"
                     )
-                    
-                    if (visit.isGeofenceDeleted) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Text(
-                                text = "Deleted",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-                
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (visit.exitTime == null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Text(
-                                text = "Active",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                    }
-                    
-                    IconButton(onClick = { showDeleteDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete visit",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Date
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Date:",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.width(100.dp)
                 )
-                Text(
-                    text = visit.formattedDate,
-                    style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(8.dp))
+            // completed visit with duration
+            VisitCard(
+                visit = com.rex.careradius.data.local.entity.VisitWithGeofence(
+                    visit = com.rex.careradius.data.local.entity.VisitEntity(
+                        id = 2,
+                        geofenceId = 2,
+                        geofenceName = "Office",
+                        entryTime = System.currentTimeMillis() - 7_200_000,
+                        exitTime = System.currentTimeMillis() - 3_600_000,
+                        durationMillis = 3_600_000
+                    ),
+                    geofence = com.rex.careradius.data.local.entity.GeofenceEntity(
+                        id = 2,
+                        name = "Office",
+                        latitude = 28.6200,
+                        longitude = 77.2100,
+                        radius = 50f,
+                        createdAt = System.currentTimeMillis(),
+                        icon = "🏢"
+                    )
                 )
-            }
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Entry time
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Entry:",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.width(100.dp)
-                )
-                Text(
-                    text = visit.formattedEntryTime,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Exit time
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Exit:",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.width(100.dp)
-                )
-                Text(
-                    text = visit.formattedExitTime,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (visit.exitTime == null) MaterialTheme.colorScheme.tertiary
-                           else MaterialTheme.colorScheme.onSurface
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Duration
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "Duration:",
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.width(100.dp)
-                )
-                Text(
-                    text = visit.formattedDuration,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
+            )
         }
     }
 }
-
-// Preview functions
-@Preview(showBackground = true, name = "Active Visit Card")
-@Composable
-private fun ActiveVisitCardPreview() {
-    MaterialTheme {
-        Column(modifier = Modifier.padding(16.dp)) {
-            VisitCard(visit = VisitModel(
-                visitId = 1,
-                geofenceName = "Office",
-                entryTime = System.currentTimeMillis() - 3600000, // 1 hour ago
-                exitTime = null,
-                durationMillis = null,
-                geofenceLatitude = 37.7749,
-                geofenceLongitude = -122.4194
-            ))
-        }
-    }
-}
-
-@Preview(showBackground = true, name = "Completed Visit Card")
-@Composable
-private fun CompletedVisitCardPreview() {
-    MaterialTheme {
-        Column(modifier = Modifier.padding(16.dp)) {
-            VisitCard(visit = VisitModel(
-                visitId = 2,
-                geofenceName = "Home",
-                entryTime = System.currentTimeMillis() - 7200000,
-                exitTime = System.currentTimeMillis() - 3600000,
-                durationMillis = 3600000, // 1 hour
-                geofenceLatitude = 37.7849,
-                geofenceLongitude = -122.4094
-            ))
-        }
-    }
-}
-
