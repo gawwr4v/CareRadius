@@ -2,8 +2,8 @@ package com.rex.careradius.presentation.map
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rex.careradius.data.local.dao.GeofenceDao
 import com.rex.careradius.data.local.entity.GeofenceEntity
-import com.rex.careradius.data.repository.GeofenceRepository
 import com.rex.careradius.system.geofence.GeofenceManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -21,7 +21,7 @@ data class LocationCoordinates(
  * Manages geofence creation, editing, and display
  */
 class MapViewModel(
-    private val geofenceRepository: GeofenceRepository,
+    private val geofenceDao: GeofenceDao,
     private val geofenceManager: GeofenceManager
 ) : ViewModel() {
     
@@ -89,7 +89,7 @@ class MapViewModel(
     
     private fun loadGeofences() {
         viewModelScope.launch {
-            geofenceRepository.getAllGeofences().collect { geofenceList ->
+            geofenceDao.getAllGeofences().collect { geofenceList ->
                 _geofences.value = geofenceList
             }
         }
@@ -137,13 +137,13 @@ class MapViewModel(
         if (geofenceId != null) {
             // Update existing geofence location
             viewModelScope.launch {
-                val geofence = geofenceRepository.getGeofenceById(geofenceId)
+                val geofence = geofenceDao.getGeofenceById(geofenceId)
                 geofence?.let {
                     val updated = it.copy(
                         latitude = location.latitude,
                         longitude = location.longitude
                     )
-                    geofenceRepository.insert(updated)
+                    geofenceDao.insert(updated)
                     
                     // Re-register with new location
                     geofenceManager.unregisterGeofence(updated.id)
@@ -160,7 +160,6 @@ class MapViewModel(
         } else {
             // New geofence - show creation dialog
             _showDialog.value = true
-            _editingGeofence.value = null
             _editingGeofence.value = null
             _geofenceName.value = ""
             _radius.value = 30f
@@ -209,7 +208,6 @@ class MapViewModel(
             _showCoordinateDialog.value = false
             _showDialog.value = true
             _editingGeofence.value = null
-            _editingGeofence.value = null
             _geofenceName.value = ""
             _radius.value = 30f
             _icon.value = "📍"
@@ -221,7 +219,7 @@ class MapViewModel(
     // Tap on existing marker to edit
     fun onMarkerTapped(geofenceId: Long) {
         viewModelScope.launch {
-            val geofence = geofenceRepository.getGeofenceById(geofenceId)
+            val geofence = geofenceDao.getGeofenceById(geofenceId)
             geofence?.let {
                 _editingGeofence.value = it
                 _selectedLocation.value = LocationCoordinates(it.latitude, it.longitude)
@@ -286,7 +284,7 @@ class MapViewModel(
                     entryMessage = entryMsg,
                     exitMessage = exitMsg
                 )
-                geofenceRepository.insert(updated) // REPLACE mode
+                geofenceDao.insert(updated) // REPLACE mode
                 
                 // Re-register with updated parameters
                 geofenceManager.unregisterGeofence(updated.id)
@@ -309,7 +307,7 @@ class MapViewModel(
                     exitMessage = exitMsg
                 )
                 
-                val geofenceId = geofenceRepository.insert(geofence)
+                val geofenceId = geofenceDao.insert(geofence)
                 
                 // Register with system
                 geofenceManager.registerGeofence(
