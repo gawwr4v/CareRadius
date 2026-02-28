@@ -55,30 +55,16 @@ A geofencing Android application that tracks your visits to specific locations. 
 
 ## Screenshots
 
-<table>
-  <tr>
-    <th>Map View</th>
-    <th>Geofence List</th>
-    <th>Visit History</th>
-  </tr>
-  <tr>
-    <td align="center">
-      <img src="https://github.com/user-attachments/assets/92e1c22a-61f5-4198-9c69-e2cd7f17f273" width="250"/><br/>
-      <em>Adding a Location </em>
-      <br/><br/>
-      <img src="https://github.com/user-attachments/assets/ec13e213-d8a5-4cd2-8bea-101faa405313" width="250"/><br/>
-      <em>Geofence markers</em>
-    </td>
-    <td align="center" valign="top">
-      <img src="https://github.com/user-attachments/assets/24cb64bf-d564-485b-8dcb-6b0540797435" width="250"/><br/>
-      <em>Saved geofences with edit options</em>
-    </td>
-    <td align="center" valign="top">
-      <img src="https://github.com/user-attachments/assets/08403c5c-1f9c-41e3-94d8-ba8cc3f32e24" width="250"/><br/>
-      <em>Visit history with duration</em>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/2be101ae-8dee-4a7a-af0d-33e3bf57c508" width="300" style="margin-right: 24px;" />
+
+  <img src="https://github.com/user-attachments/assets/22fc1020-87d5-47c3-87f1-ed253dc53a37" width="300" />
+
+
+</p>
+<p align="center"><b>Dark Theme</b> &nbsp;&nbsp;&nbsp;&nbsp; <b>Light Theme</b></p>
+
+<br />
 
 
 ## Tech Stack
