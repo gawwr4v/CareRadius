@@ -291,6 +291,71 @@ fun SettingsScreen(
             }
         )
 
+        // polling interval selector, lets the user pick how often the service checks location.
+        // uses an M3 dialog with radio buttons to match the rest of the settings style.
+        val pollingIntervalMs by viewModel.pollingIntervalMs.collectAsStateWithLifecycle()
+        var showIntervalDialog by remember { mutableStateOf(false) }
+        
+        val intervalOptions = listOf(
+            60_000L to "1 min (Fast)",
+            120_000L to "2 min (Recommended)",
+            300_000L to "5 min (Battery Saver)"
+        )
+        val currentLabel = intervalOptions.firstOrNull { it.first == pollingIntervalMs }?.second ?: "2 min (Recommended)"
+
+        ListItem(
+            headlineContent = { Text("Location Check Interval") },
+            supportingContent = { 
+                Text(
+                    currentLabel, 
+                    color = MaterialTheme.colorScheme.primary
+                ) 
+            },
+            leadingContent = { Icon(Icons.Default.Place, contentDescription = null) },
+            modifier = Modifier.clickable { showIntervalDialog = true }
+        )
+
+        if (showIntervalDialog) {
+            AlertDialog(
+                onDismissRequest = { showIntervalDialog = false },
+                title = { Text("Location Check Interval") },
+                text = {
+                    Column {
+                        intervalOptions.forEach { (ms, label) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setPollingInterval(ms, context)
+                                        showIntervalDialog = false
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = ms == pollingIntervalMs,
+                                    onClick = {
+                                        viewModel.setPollingInterval(ms, context)
+                                        showIntervalDialog = false
+                                    }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showIntervalDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
         SettingsSectionTitle("Data Management")
@@ -368,4 +433,34 @@ private fun SettingsSectionTitle(title: String) {
         ),
         modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp)
     )
+}
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true)
+@Composable
+private fun SettingsSectionTitlePreview() {
+    com.rex.careradius.ui.theme.CareRadiusTheme {
+        Column {
+            SettingsSectionTitle("General")
+            ListItem(
+                headlineContent = { Text("Dark Theme") },
+                supportingContent = { Text("Adjust appearance") },
+                leadingContent = { Icon(Icons.Default.Info, contentDescription = null) },
+                trailingContent = {
+                    Switch(checked = true, onCheckedChange = {})
+                }
+            )
+            ListItem(
+                headlineContent = { Text("Location Check Interval") },
+                supportingContent = {
+                    Text(
+                        "2 min (Recommended)",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                leadingContent = { Icon(Icons.Default.Place, contentDescription = null) }
+            )
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            SettingsSectionTitle("Data Management")
+        }
+    }
 }
