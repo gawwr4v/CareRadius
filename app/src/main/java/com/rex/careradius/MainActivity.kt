@@ -27,7 +27,9 @@ import com.rex.careradius.data.repository.UserPreferencesRepository
 import com.rex.careradius.navigation.NavGraph
 import com.rex.careradius.navigation.Screen
 import com.rex.careradius.presentation.settings.SettingsViewModel
+import com.rex.careradius.presentation.settings.SettingsViewModelFactory
 import com.rex.careradius.system.geofence.GeofenceManager
+import com.rex.careradius.system.geofence.GeofenceTrackingService
 import com.rex.careradius.system.notification.NotificationHelper
 import com.rex.careradius.ui.theme.CareRadiusTheme
 
@@ -39,7 +41,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var geofenceManager: GeofenceManager
     private lateinit var notificationHelper: NotificationHelper
     private lateinit var userPreferencesRepository: UserPreferencesRepository
-    private lateinit var settingsViewModel: SettingsViewModel
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,17 +51,25 @@ class MainActivity : ComponentActivity() {
         notificationHelper = NotificationHelper(this)
         userPreferencesRepository = UserPreferencesRepository(this)
         
-        // ViewModel created here survives config changes ONLY if Activity does
-        // For production, use ViewModelProvider to survive rotation
-        settingsViewModel = SettingsViewModel(userPreferencesRepository)
-        
-        // Resilience: Re-register fences after reboot/crash
+        // re register geofences and reconcile visits on every app open
         geofenceManager.reregisterAllGeofences()
+        // close any visits the OS silently missed during Doze mode, overnight stays etc.
+        geofenceManager.reconcileOpenVisitsOnStartup()
+        // start the foreground service to keep the process alive for background tracking
+        GeofenceTrackingService.start(this)
         
         enableEdgeToEdge()
         setContent {
+            val settingsViewModel = androidx.lifecycle.viewmodel.compose.viewModel<SettingsViewModel>(
+                factory = SettingsViewModelFactory(
+                    userPreferencesRepository = userPreferencesRepository,
+                    geofenceDao = database.geofenceDao(),
+                    visitDao = database.visitDao(),
+                    geofenceManager = geofenceManager
+                )
+            )
+            
             // Collect theme preference immediately to avoid flash of wrong theme
-            // map specific flow to state
             val isDarkTheme by settingsViewModel.isDarkTheme.collectAsState(initial = false)
             
             CareRadiusTheme(darkTheme = isDarkTheme) {
@@ -153,17 +162,19 @@ fun MainScreen(
                         },
                         selected = isSelected,
                         onClick = {
-                            navController.navigate(item.route) {
-                                // Pop up to the start destination of the graph to
-                                // avoid building up a large stack of destinations
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
+                            if (!isSelected) {
+                                navController.navigate(item.route) {
+                                    // Pop up to the start destination of the graph to
+                                    // avoid building up a large stack of destinations
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    // Avoid multiple copies of the same destination when
+                                    // reselecting the same item
+                                    launchSingleTop = true
+                                    // Restore state when reselecting a previously selected item
+                                    restoreState = true
                                 }
-                                // Avoid multiple copies of the same destination when
-                                // reselecting the same item
-                                launchSingleTop = true
-                                // Restore state when reselecting a previously selected item
-                                restoreState = true
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
