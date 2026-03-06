@@ -1,13 +1,12 @@
 package com.rex.careradius.presentation.geofencelist
 
 import android.annotation.SuppressLint
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.rex.careradius.data.local.dao.GeofenceDao
+import com.rex.careradius.data.local.dao.VisitDao
 import com.rex.careradius.data.local.entity.GeofenceEntity
-import com.rex.careradius.data.repository.GeofenceRepository
-import com.rex.careradius.data.repository.VisitRepository
 import com.rex.careradius.system.geofence.GeofenceManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,11 +14,9 @@ import kotlin.math.*
 
 // tags: viewmodel, geofence, list, manage
 class GeofenceListViewModel(
-    // WARNING: Context passed here should be Application context to avoid leaks
-    // In NavGraph currently passing LocalContext.current - acceptable for simple single-activity app
-    private val context: Context,
-    private val geofenceRepository: GeofenceRepository,
-    private val visitRepository: VisitRepository,
+    private val fusedLocationClient: FusedLocationProviderClient,
+    private val geofenceDao: GeofenceDao,
+    private val visitDao: VisitDao,
     private val geofenceManager: GeofenceManager
 ) : ViewModel() {
     
@@ -31,11 +28,9 @@ class GeofenceListViewModel(
     private val _changingLocationForGeofence = MutableStateFlow<GeofenceEntity?>(null)
     val changingLocationForGeofence: StateFlow<GeofenceEntity?> = _changingLocationForGeofence.asStateFlow()
     
-    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-    
     init {
         viewModelScope.launch {
-            geofenceRepository.getAllGeofences().collect {
+            geofenceDao.getAllGeofences().collect {
                 _geofences.value = it
             }
         }
@@ -48,11 +43,10 @@ class GeofenceListViewModel(
             geofenceManager.unregisterGeofence(geofence.id)
             
             // delete from database (cascades to visits)
-            geofenceRepository.delete(geofence)
+            geofenceDao.delete(geofence)
         }
     }
     
-    // tags: update, edit, radius
     // tags: update, edit, radius
     fun updateGeofence(
         geofence: GeofenceEntity, 
@@ -76,16 +70,19 @@ class GeofenceListViewModel(
                 entryMessage = newEntryMessage,
                 exitMessage = newExitMessage
             )
-            geofenceRepository.insert(updated) // REPLACE mode
+            geofenceDao.insert(updated) // REPLACE mode
             
-            // re-register with updated radius
-            geofenceManager.unregisterGeofence(updated.id)
-            geofenceManager.registerGeofence(
-                id = updated.id,
-                latitude = updated.latitude,
-                longitude = updated.longitude,
-                radius = newRadius
-            )
+            // re-register with updated radius ONLY if the radius actually changed
+            // this prevents the OS from triggering duplicate ENTER events on simple name/icon edits
+            if (newRadius != geofence.radius) {
+                geofenceManager.unregisterGeofence(updated.id)
+                geofenceManager.registerGeofence(
+                    id = updated.id,
+                    latitude = updated.latitude,
+                    longitude = updated.longitude,
+                    radius = newRadius
+                )
+            }
         }
     }
     
@@ -119,7 +116,7 @@ class GeofenceListViewModel(
     
     // close any open visit for a geofence
     private suspend fun closeOpenVisitForGeofence(geofenceId: Long) {
-        val openVisit = visitRepository.getOpenVisitForGeofence(geofenceId)
+        val openVisit = visitDao.getOpenVisitForGeofence(geofenceId)
         if (openVisit != null) {
             val exitTime = System.currentTimeMillis()
             val duration = exitTime - openVisit.entryTime
@@ -127,7 +124,7 @@ class GeofenceListViewModel(
                 exitTime = exitTime,
                 durationMillis = duration
             )
-            visitRepository.updateVisit(closedVisit)
+            visitDao.updateVisit(closedVisit)
         }
     }
     
@@ -157,7 +154,7 @@ class GeofenceListViewModel(
                 latitude = newLatitude,
                 longitude = newLongitude
             )
-            geofenceRepository.insert(updated) // REPLACE mode
+            geofenceDao.insert(updated) // REPLACE mode
             
             // re-register with new location
             geofenceManager.unregisterGeofence(updated.id)

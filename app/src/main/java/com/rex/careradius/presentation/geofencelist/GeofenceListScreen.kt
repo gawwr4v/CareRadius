@@ -469,3 +469,42 @@ private fun GeofenceCard(
         }
     }
 }
+
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, name = "Geofence Card Light")
+@androidx.compose.ui.tooling.preview.Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES, name = "Geofence Card Dark")
+@Composable
+private fun GeofenceCardPreview() {
+    com.rex.careradius.ui.theme.CareRadiusTheme {
+        Column(modifier = Modifier.padding(16.dp)) {
+            GeofenceCard(
+                geofence = GeofenceEntity(
+                    id = 1,
+                    name = "Home",
+                    latitude = 28.6139,
+                    longitude = 77.2090,
+                    radius = 30f,
+                    createdAt = System.currentTimeMillis(),
+                    icon = "🏠"
+                ),
+                onClick = {},
+                onLongPress = {},
+                onEdit = {}
+            )
+            Spacer(Modifier.height(8.dp))
+            GeofenceCard(
+                geofence = GeofenceEntity(
+                    id = 2,
+                    name = "Office",
+                    latitude = 28.6200,
+                    longitude = 77.2100,
+                    radius = 50f,
+                    createdAt = System.currentTimeMillis(),
+                    icon = "🏢"
+                ),
+                onClick = {},
+                onLongPress = {},
+                onEdit = {}
+            )
+        }
+    }
+}
