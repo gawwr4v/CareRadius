@@ -7,10 +7,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-/**
- * Re registers all geofences after device reboot.
- * Geofences registered with Google Play Services are lost on restart.
- */
+// re registers all geofences after device reboot.
+// geofences registered with Google Play Services are lost on restart,
+// so this also restarts the tracking service.
 class GeofenceBootReceiver : BroadcastReceiver() {
     
     override fun onReceive(context: Context, intent: Intent) {
