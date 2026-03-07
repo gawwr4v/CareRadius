@@ -6,11 +6,13 @@ import android.content.Intent
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
 import com.rex.careradius.data.local.AppDatabase
+import com.rex.careradius.data.local.dao.VisitDao
 import com.rex.careradius.data.local.entity.VisitEntity
-import com.rex.careradius.data.repository.VisitRepository
+import com.rex.careradius.data.repository.UserPreferencesRepository
 import com.rex.careradius.system.notification.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class GeofenceReceiver : BroadcastReceiver() {
@@ -47,11 +49,14 @@ class GeofenceReceiver : BroadcastReceiver() {
         val pendingResult = goAsync()
         
         val database = AppDatabase.getDatabase(context)
-        val visitRepository = VisitRepository(database.visitDao())
+        val visitDao = database.visitDao()
         val notificationHelper = NotificationHelper(context)
+        val userPreferencesRepository = UserPreferencesRepository(context)
         
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val notificationsEnabled = userPreferencesRepository.isNotificationsEnabled.first()
+                
                 triggeringGeofences.forEach { geofence ->
                     val geofenceId = geofence.requestId.toLongOrNull() ?: return@forEach
                     android.util.Log.d(TAG, "Processing geofence id: $geofenceId")
@@ -59,11 +64,23 @@ class GeofenceReceiver : BroadcastReceiver() {
                     when (geofenceTransition) {
                         Geofence.GEOFENCE_TRANSITION_ENTER -> {
                             android.util.Log.d(TAG, "ENTER transition for $geofenceId")
-                            handleGeofenceEntry(context, geofenceId, visitRepository, notificationHelper)
+                            handleGeofenceEntry(
+                                context = context, 
+                                geofenceId = geofenceId, 
+                                visitDao = visitDao, 
+                                notificationHelper = notificationHelper,
+                                notificationsEnabled = notificationsEnabled
+                            )
                         }
                         Geofence.GEOFENCE_TRANSITION_EXIT -> {
                             android.util.Log.d(TAG, "EXIT transition for $geofenceId")
-                            handleGeofenceExit(context, geofenceId, visitRepository, notificationHelper)
+                            handleGeofenceExit(
+                                context = context,
+                                geofenceId = geofenceId,
+                                visitDao = visitDao,
+                                notificationHelper = notificationHelper,
+                                notificationsEnabled = notificationsEnabled
+                            )
                         }
                     }
                 }
@@ -77,13 +94,14 @@ class GeofenceReceiver : BroadcastReceiver() {
     private suspend fun handleGeofenceEntry(
         context: Context,
         geofenceId: Long,
-        visitRepository: VisitRepository,
-        notificationHelper: NotificationHelper
+        visitDao: VisitDao,
+        notificationHelper: NotificationHelper,
+        notificationsEnabled: Boolean
     ) {
         // Close ALL open visits first — enforces single-active-visit guarantee
         // If user walks from geofence A into geofence B, A's visit gets closed here
         val now = System.currentTimeMillis()
-        visitRepository.closeAllOpenVisits(now)
+        visitDao.closeAllOpenVisits(now)
         
         // Get geofence details for name and custom message
         val database = AppDatabase.getDatabase(context)
@@ -99,24 +117,27 @@ class GeofenceReceiver : BroadcastReceiver() {
             exitTime = null,
             durationMillis = null
         )
-        visitRepository.insert(visit)
+        visitDao.insert(visit)
         android.util.Log.d(TAG, "Created visit for $geofenceName (id=$geofenceId)")
         
-        notificationHelper.showGeofenceNotification(
-            geofenceName = geofenceName,
-            eventType = "Entered",
-            notificationId = geofenceId.toInt(),
-            customMessage = entryMessage
-        )
+        if (notificationsEnabled) {
+            notificationHelper.showGeofenceNotification(
+                geofenceName = geofenceName,
+                eventType = "Entered",
+                notificationId = geofenceId.toInt(),
+                customMessage = entryMessage
+            )
+        }
     }
     
     private suspend fun handleGeofenceExit(
         context: Context,
         geofenceId: Long,
-        visitRepository: VisitRepository,
-        notificationHelper: NotificationHelper
+        visitDao: VisitDao,
+        notificationHelper: NotificationHelper,
+        notificationsEnabled: Boolean
     ) {
-        val openVisit = visitRepository.getOpenVisitForGeofence(geofenceId)
+        val openVisit = visitDao.getOpenVisitForGeofence(geofenceId)
         if (openVisit == null) {
             android.util.Log.d(TAG, "No open visit for $geofenceId on EXIT (likely closed on prior ENTER)")
             return
@@ -129,7 +150,7 @@ class GeofenceReceiver : BroadcastReceiver() {
             exitTime = exitTime,
             durationMillis = duration
         )
-        visitRepository.updateVisit(updatedVisit)
+        visitDao.updateVisit(updatedVisit)
         
         val database = AppDatabase.getDatabase(context)
         val geofence = database.geofenceDao().getGeofenceById(geofenceId)
@@ -138,11 +159,13 @@ class GeofenceReceiver : BroadcastReceiver() {
         
         android.util.Log.d(TAG, "Closed visit for $geofenceName, duration=${duration}ms")
         
-        notificationHelper.showGeofenceNotification(
-            geofenceName = geofenceName,
-            eventType = "Exited",
-            notificationId = geofenceId.toInt() + 10000,
-            customMessage = exitMessage
-        )
+        if (notificationsEnabled) {
+            notificationHelper.showGeofenceNotification(
+                geofenceName = geofenceName,
+                eventType = "Exited",
+                notificationId = geofenceId.toInt() + 10000,
+                customMessage = exitMessage
+            )
+        }
     }
 }
