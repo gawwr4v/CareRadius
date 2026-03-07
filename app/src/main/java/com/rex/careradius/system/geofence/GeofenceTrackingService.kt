@@ -29,7 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-// foreground service that polls location every 60s and checks if we are inside any zones.
+// foreground service that polls location at a user configurable interval and checks zone distances.
 // google play services geofencing is unreliable on many devices so we do our own checking.
 // the GeofenceReceiver is still registered as a bonus but this is the primary detection now.
 class GeofenceTrackingService : Service() {
@@ -37,9 +37,8 @@ class GeofenceTrackingService : Service() {
     companion object {
         private const val TAG = "GeofenceTrackingService"
         private const val CHANNEL_ID = "tracking_channel"
-        // must not collide with geofence event notification IDs (which use geofenceId.toInt())
+        // must not collide with geofence event notification IDs which use geofenceId.toInt()
         private const val NOTIFICATION_ID = 99999
-        private const val POLL_INTERVAL_MS = 60_000L
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, GeofenceTrackingService::class.java))
@@ -51,10 +50,16 @@ class GeofenceTrackingService : Service() {
     }
 
     private lateinit var fusedClient: FusedLocationProviderClient
-    private lateinit var locationCallback: LocationCallback
+    private var locationCallback: LocationCallback? = null
+
+    // cached so we dont recreate them on every poll or notification
+    private lateinit var prefsRepo: UserPreferencesRepository
+    private lateinit var notificationHelper: NotificationHelper
 
     override fun onCreate() {
         super.onCreate()
+        prefsRepo = UserPreferencesRepository(this)
+        notificationHelper = NotificationHelper(this)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
         startLocationPolling()
@@ -66,7 +71,7 @@ class GeofenceTrackingService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        fusedClient.removeLocationUpdates(locationCallback)
+        locationCallback?.let { fusedClient.removeLocationUpdates(it) }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -74,30 +79,37 @@ class GeofenceTrackingService : Service() {
     private fun startLocationPolling() {
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, POLL_INTERVAL_MS)
-            .setMinUpdateIntervalMillis(POLL_INTERVAL_MS / 2)
-            .build()
+        // read the users preferred interval from DataStore before starting location updates
+        CoroutineScope(Dispatchers.IO).launch {
+            val intervalMs = prefsRepo.pollingIntervalMs.first()
+            Log.d(TAG, "polling interval set to ${intervalMs}ms")
 
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                val location = result.lastLocation ?: return
-                Log.d(TAG, "location update: ${location.latitude}, ${location.longitude}")
-                CoroutineScope(Dispatchers.IO).launch {
-                    checkGeofences(location)
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, intervalMs)
+                .setMinUpdateIntervalMillis(intervalMs / 2)
+                .build()
+
+            val callback = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    val location = result.lastLocation ?: return
+                    Log.d(TAG, "location update: ${location.latitude}, ${location.longitude}")
+                    CoroutineScope(Dispatchers.IO).launch {
+                        checkGeofences(location)
+                    }
                 }
             }
-        }
+            locationCallback = callback
 
-        try {
-            fusedClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-        } catch (e: SecurityException) {
-            Log.e(TAG, "location permission missing, cant poll: ${e.message}")
+            try {
+                fusedClient.requestLocationUpdates(locationRequest, callback, Looper.getMainLooper())
+            } catch (e: SecurityException) {
+                Log.e(TAG, "location permission missing, cant poll: ${e.message}")
+            }
         }
     }
 
-    // the core logic. compare current location against all zones in the db.
-    // if we are inside a zone and theres no open visit, create one.
-    // if we are outside all zones and theres an open visit, close it.
+    // compare current location against all zones in the db.
+    // if inside a zone and no open visit exists, create one.
+    // if outside all zones and an open visit exists, close it.
     private suspend fun checkGeofences(currentLocation: Location) {
         val database = AppDatabase.getDatabase(this)
         val geofenceDao = database.geofenceDao()
@@ -109,7 +121,7 @@ class GeofenceTrackingService : Service() {
 
         // figure out which zones we are currently inside
         val insideZoneIds = mutableSetOf<Long>()
-        allGeofences.forEach { geofence ->
+        for (geofence in allGeofences) {
             val distance = FloatArray(1)
             Location.distanceBetween(
                 currentLocation.latitude, currentLocation.longitude,
@@ -122,50 +134,50 @@ class GeofenceTrackingService : Service() {
         }
 
         // close any open visits for zones we are no longer inside
-        openVisits.forEach { visit ->
+        for (visit in openVisits) {
             if (visit.geofenceId == null || visit.geofenceId !in insideZoneIds) {
                 Log.d(TAG, "closing stale visit for '${visit.geofenceName}'")
                 visitDao.updateVisit(visit.copy(exitTime = now, durationMillis = now - visit.entryTime))
 
-                // send exit notification
                 val geofence = visit.geofenceId?.let { geofenceDao.getGeofenceById(it) }
-                sendNotification(geofence?.name ?: visit.geofenceName, "Exited", (visit.geofenceId?.toInt() ?: 0) + 10000, geofence?.exitMessage)
+                sendNotification(
+                    geofence?.name ?: visit.geofenceName,
+                    "Exited",
+                    (visit.geofenceId?.toInt() ?: 0) + 10000,
+                    geofence?.exitMessage
+                )
             }
         }
 
         // if we are inside a zone and there is no open visit for it, create one.
-        // only track the first zone we are inside (single active visit rule)
+        // only track the first zone (single active visit rule from GeofenceReceiver)
         val openVisitGeofenceIds = openVisits.mapNotNull { it.geofenceId }.toSet()
         if (insideZoneIds.isNotEmpty()) {
-            val firstInsideId = insideZoneIds.first()
-            if (firstInsideId !in openVisitGeofenceIds) {
-                // close any other open visits first (single active visit guarantee)
+            val zoneId = insideZoneIds.first()
+            if (zoneId !in openVisitGeofenceIds) {
+                // close any other open visits first
                 visitDao.closeAllOpenVisits(now)
 
-                val geofence = geofenceDao.getGeofenceById(firstInsideId) ?: return
-                val visit = VisitEntity(
+                val geofence = geofenceDao.getGeofenceById(zoneId) ?: return
+                visitDao.insert(VisitEntity(
                     geofenceId = geofence.id,
                     geofenceName = geofence.name,
                     entryTime = now,
                     exitTime = null,
                     durationMillis = null
-                )
-                visitDao.insert(visit)
+                ))
                 Log.d(TAG, "created visit for '${geofence.name}'")
-
                 sendNotification(geofence.name, "Entered", geofence.id.toInt(), geofence.entryMessage)
             }
         }
     }
 
-    private fun sendNotification(zoneName: String, eventType: String, notificationId: Int, customMessage: String?) {
-        CoroutineScope(Dispatchers.IO).launch {
-            val prefsRepo = UserPreferencesRepository(this@GeofenceTrackingService)
-            val notificationsEnabled = prefsRepo.isNotificationsEnabled.first()
-            if (notificationsEnabled) {
-                val helper = NotificationHelper(this@GeofenceTrackingService)
-                helper.showGeofenceNotification(zoneName, eventType, notificationId, customMessage)
-            }
+    // checks the notification preference before sending. suspend because its called
+    // from within an existing coroutine so no need for a new scope.
+    private suspend fun sendNotification(zoneName: String, eventType: String, notificationId: Int, customMessage: String?) {
+        val notificationsEnabled = prefsRepo.isNotificationsEnabled.first()
+        if (notificationsEnabled) {
+            notificationHelper.showGeofenceNotification(zoneName, eventType, notificationId, customMessage)
         }
     }
 
